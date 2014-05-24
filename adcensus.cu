@@ -1,15 +1,11 @@
 extern "C" {
-    #include "lua.h"
+	#include "lua.h"
 	#include "lualib.h"
 	#include "lauxlib.h"
 }
 
 #include "luaT.h"
 #include "THC.h"
-
-#include <thrust/transform.h>
-#include <thrust/reduce.h>
-#include <thrust/device_ptr.h>
 
 #include <stdio.h>
 #include <assert.h>
@@ -19,10 +15,10 @@ extern "C" {
 #define TB 128
 
 void checkCudaError(lua_State *L) {
-    cudaError_t status = cudaPeekAtLastError();
-    if (status != cudaSuccess) {
-        luaL_error(L, cudaGetErrorString(status));
-    }
+	cudaError_t status = cudaPeekAtLastError();
+	if (status != cudaSuccess) {
+		luaL_error(L, cudaGetErrorString(status));
+	}
 }
 
 __global__ void ad(float *x0, float *x1, float *output, int size, int size3, int size23)
@@ -72,6 +68,6 @@ static const struct luaL_Reg funcs[] = {
 };
 
 extern "C" int luaopen_libadcensus(lua_State *L) {
-    luaL_openlib(L, "adcensus", funcs, 0);
-    return 1;
+	luaL_openlib(L, "adcensus", funcs, 0);
+	return 1;
 }
