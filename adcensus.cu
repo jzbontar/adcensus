@@ -33,14 +33,14 @@ __global__ void ad(float *x0, float *x1, float *output, int size, int size3, int
 
 		float dist = 0;
 		if (x - d < 0) {
-			dist = CUDART_NAN;
+			dist = CUDART_INF;
 		} else {
 			for (int i = 0; i < 3; i++) {
 				int ind = i * size23 + xy;
-				dist += fabsf(x0[ind] - x1[ind - d]) / 3.;
+				dist += fabs(x0[ind] - x1[ind - d]);
 			}
 		}
-		output[id] = dist;
+		output[id] = dist / 3;
 	}
 }
 

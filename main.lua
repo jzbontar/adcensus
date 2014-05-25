@@ -21,13 +21,13 @@ function census(x0, x1)
    return vol
 end
 
-x0 = image.loadPNG('data/tsukuba0.png'):resize(1, 3, height, width):cuda()
-x1 = image.loadPNG('data/tsukuba1.png'):resize(1, 3, height, width):cuda()
+x0 = image.loadPNG('data/tsukuba0.png', 3, 'byte'):float():resize(1, 3, height, width):cuda()
+x1 = image.loadPNG('data/tsukuba1.png', 3, 'byte'):float():resize(1, 3, height, width):cuda()
 pred = torch.CudaTensor(1, 1, height, width)
 
 ad_vol = ad(x0, x1)
 census_vol = census(x0, x1)
-adcensus.spatial_argmin(census_vol, pred)
-pred:div(disp_max)
+adcensus.spatial_argmin(ad_vol, pred)
+pred:add(-1):div(disp_max)
 
-image.savePNG('foo.png', pred[{1,1}])
+image.savePNG('foo.lua.png', pred[{1,1}])
