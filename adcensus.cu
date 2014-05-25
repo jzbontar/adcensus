@@ -62,8 +62,45 @@ int ad(lua_State *L)
 	return 0;
 }
 
+__global__ void spatial_argmin(float *input, float *output, int size, int size1, int size23)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		int dim23 = id % size23;
+		int dim0 = id / size23;
+
+		int argmin = 0;
+		float min = 2e38;
+		for (int i = 0; i < size1; i++) {
+			float val = input[(dim0 * size1 + i) * size23 + dim23];
+			if (val < min) {
+				min = val;
+				argmin = i;
+			}
+		}
+		output[id] = argmin + 1;
+	}
+}
+
+int spatial_argmin(lua_State *L)
+{
+	THCudaTensor *input = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *output = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+
+	spatial_argmin<<<(THCudaTensor_nElement(output) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(input),
+		THCudaTensor_data(output),
+		THCudaTensor_nElement(output),
+		THCudaTensor_size(input, 1),
+		THCudaTensor_size(input, 2) * THCudaTensor_size(output, 3));
+	checkCudaError(L);
+	return 0;
+}
+
+
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
+	{"spatial_argmin", spatial_argmin},
 	{NULL, NULL}
 };
 
