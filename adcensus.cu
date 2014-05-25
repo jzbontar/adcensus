@@ -75,7 +75,7 @@ __global__ void census(float *x0, float *x1, float *output, int size, int size2,
 
 		float dist = 0;
 		if (x - d < 0) {
-			dist = CUDART_NAN;
+			dist = CUDART_INF;
 		} else {
 			int cnt = 0;
 			for (int i = 0; i < 3; i++) {
