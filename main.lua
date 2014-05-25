@@ -37,8 +37,8 @@ function combine_cost(ad_vol, ad_lambda, census_vol, census_lambda)
    return vol:add(ad_vol, 1, census_vol)
 end
 
-x0 = image.loadPNG('data/tsukuba0.png'):resize(1, 3, height, width):cuda()
-x1 = image.loadPNG('data/tsukuba1.png'):resize(1, 3, height, width):cuda()
+x0 = image.loadPNG('data/tsukuba0.png', 3, 'byte'):float():resize(1, 3, height, width):cuda()
+x1 = image.loadPNG('data/tsukuba1.png', 3, 'byte'):float():resize(1, 3, height, width):cuda()
 pred = torch.CudaTensor(1, 1, height, width)
 
 ad_vol = ad(x0, x1)

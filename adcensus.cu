@@ -77,23 +77,19 @@ __global__ void census(float *x0, float *x1, float *output, int size, int size2,
 		if (x - d < 0) {
 			dist = CUDART_INF;
 		} else {
-			int cnt = 0;
 			for (int i = 0; i < 3; i++) {
 				int ind_p = (i * size2 + y) * size3 + x;
 				for (int yy = y - 4; yy <= y + 4; yy++) {
-					for (int xx = x - 4; xx <= x + 4; xx++) {
+					for (int xx = x - 3; xx <= x + 3; xx++) {
 						if (0 <= xx - d && xx < size3 && 0 <= yy && yy < size2) {
 							int ind_q = (i * size2 + yy) * size3 + xx;
 							if ((x0[ind_p] - x0[ind_q]) * (x1[ind_p - d] - x1[ind_q - d]) < 0) {
 								dist++;
 							}
-							cnt++;
 						}
 					}
 				}
 			}
-			assert(cnt > 0);
-			dist /= cnt;
 		}
 		output[id] = dist;
 	}
