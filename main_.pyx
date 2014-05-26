@@ -55,7 +55,7 @@ def census_transform(np.ndarray[np.float64_t, ndim=3] x):
     return cen
 
 cdef int cross_coditions(int i, int j, int ii, int jj, np.ndarray[np.float64_t, ndim=3] x):
-    cdef float v0, v1, v2
+    cdef double v0, v1, v2
 
     if not (0 <= ii < height and 0 <= jj < width and abs(i - ii) < L and abs(j - jj) < L):
         return 0
@@ -89,4 +89,27 @@ def cross(np.ndarray[np.float64_t, ndim=3] x):
 def cbca(np.ndarray[np.int_t, ndim=3] x0c,
          np.ndarray[np.int_t, ndim=3] x1c,
          np.ndarray[np.float64_t, ndim=3] vol):
-    pass
+    cdef np.ndarray[np.float64_t, ndim=3] res
+    cdef int i, j, ii, jj, ii_s, ii_t, jj_s, jj_t, d, cnt
+    cdef double sum
+
+    res = np.empty_like(vol)
+    for d in range(disp_max):
+        for i in range(height):
+            for j in range(width):
+                if j - d < 0:
+                    res[d,i,j] = vol[d,i,j]
+                    continue
+                sum = 0
+                cnt = 0
+                ii_s = max(x0c[i,j,0], x1c[i,j-d,0]) + 1
+                ii_t = min(x0c[i,j,1], x1c[i,j-d,1])
+                for ii in range(ii_s, ii_t):
+                    jj_s = max(x0c[i,j,2], x1c[i,j-d,2] + d) + 1
+                    jj_t = min(x0c[i,j,3], x1c[i,j-d,3] + d)
+                    for jj in range(jj_s, jj_t):
+                        sum += vol[d, ii, jj]
+                        cnt += 1
+                assert(cnt > 0)
+                res[d, i, j] = sum / cnt
+    return res

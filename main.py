@@ -1,4 +1,5 @@
 import sys
+import pickle
 
 from scipy.ndimage.filters import median_filter
 import numpy as np
@@ -40,17 +41,10 @@ adcensus_vol = ad_vol_robust + census_vol_robust
 
 # cbca
 x0c = main_.cross(x0m)
-#x1c = main_.cross(x1m)
+x1c = main_.cross(x1m)
 
-for i in range(10):
-    i = np.random.randint(0, height)
-    j = np.random.randint(0, width)
-    for ii in range(x0c[i,j,0] + 1, x0c[i,j,1]):
-        x0[ii, j] = 255
-    for jj in range(x0c[i,j,2] + 1, x0c[i,j,3]):
-        x0[i, jj] = 255
+for i in range(4):
+    adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol)
 
-Image.fromarray(x0.astype(np.uint8)).save('foo.png')
-
-#pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
-#Image.fromarray(pred.astype(np.uint8)).save('foo.py.png')
+pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
+Image.fromarray(pred.astype(np.uint8)).save('foo.png')
