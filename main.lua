@@ -5,7 +5,7 @@ require 'libadcensus'
 
 height = 288
 width = 384
-disp_max = 18
+disp_max = 16
 ad_lambda = 10
 census_lambda = 30
 L1 = 34
@@ -44,6 +44,8 @@ rho(census_vol, census_lambda)
 adcensus_vol = torch.CudaTensor(1, disp_max, height, width)
 adcensus_vol:add(ad_vol, 1, census_vol)
 savePNG('report/img/adcensus.png', adcensus_vol)
+
+os.exit()
 
 -- cbca
 x0_t = torch.CudaTensor(1, 3, width, height):copy(x0:transpose(3, 4))
