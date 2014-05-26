@@ -4,6 +4,8 @@ cimport numpy as np
 cdef int height = 288 
 cdef int width = 384 
 cdef int disp_max = 16 
+cdef int L = 17
+cdef int tau = 20
 
 def census(np.ndarray[np.float64_t, ndim=3] x0, np.ndarray[np.float64_t, ndim=3] x1):
     cdef np.ndarray[np.float64_t, ndim=3] vol
@@ -51,3 +53,40 @@ def census_transform(np.ndarray[np.float64_t, ndim=3] x):
                             cen[i, j, ind] = ne
                         ind += 1
     return cen
+
+cdef int cross_coditions(int i, int j, int ii, int jj, np.ndarray[np.float64_t, ndim=3] x):
+    cdef float v0, v1, v2
+
+    if not (0 <= ii < height and 0 <= jj < width and abs(i - ii) < L and abs(j - jj) < L):
+        return 0
+
+    if abs(i - ii) == 1 or abs(j - jj) == 1:
+        return 1
+
+    v0 = abs(x[i, j, 0] - x[ii, jj, 0])
+    v1 = abs(x[i, j, 1] - x[ii, jj, 1])
+    v2 = abs(x[i, j, 2] - x[ii, jj, 2])
+    return max(v0, v1, v2) <= tau
+    
+
+def cross(np.ndarray[np.float64_t, ndim=3] x):
+    cdef np.ndarray[np.int_t, ndim=3] res
+    cdef int i, j, yn, ys, xe, xw
+    
+    res = np.empty((height, width, 4), dtype=np.int)
+    for i in range(height):
+        for j in range(width):
+            res[i,j,0] = i - 1
+            res[i,j,1] = i + 1
+            res[i,j,2] = j - 1
+            res[i,j,3] = j + 1
+            while cross_coditions(i, j, res[i,j,0], j, x): res[i,j,0] -= 1
+            while cross_coditions(i, j, res[i,j,1], j, x): res[i,j,1] += 1
+            while cross_coditions(i, j, i, res[i,j,2], x): res[i,j,2] -= 1
+            while cross_coditions(i, j, i, res[i,j,3], x): res[i,j,3] += 1
+    return res
+
+def cbca(np.ndarray[np.int_t, ndim=3] x0c,
+         np.ndarray[np.int_t, ndim=3] x1c,
+         np.ndarray[np.float64_t, ndim=3] vol):
+    pass

@@ -1,7 +1,11 @@
-import pyximport; pyximport.install()
-import main_
+import sys
+
+from scipy.ndimage.filters import median_filter
 import numpy as np
 from PIL import Image
+
+import pyximport; pyximport.install()
+import main_
 
 height = 288
 width = 384
@@ -9,6 +13,9 @@ disp_max = 16
 
 x0 = np.array(Image.open('data/tsukuba0.png'), dtype=np.float64)
 x1 = np.array(Image.open('data/tsukuba1.png'), dtype=np.float64)
+
+x0m = median_filter(x0, size=(3, 3, 1))
+x1m = median_filter(x1, size=(3, 3, 1))
 
 # ad
 ad_vol = np.ones((disp_max, height, width)) * np.inf
@@ -31,5 +38,19 @@ ad_vol_robust = rho(ad_vol, 10)
 census_vol_robust = rho(census_vol, 30)
 adcensus_vol = ad_vol_robust + census_vol_robust
 
-pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo.py.png')
+# cbca
+x0c = main_.cross(x0m)
+#x1c = main_.cross(x1m)
+
+for i in range(10):
+    i = np.random.randint(0, height)
+    j = np.random.randint(0, width)
+    for ii in range(x0c[i,j,0] + 1, x0c[i,j,1]):
+        x0[ii, j] = 255
+    for jj in range(x0c[i,j,2] + 1, x0c[i,j,3]):
+        x0[i, jj] = 255
+
+Image.fromarray(x0.astype(np.uint8)).save('foo.png')
+
+#pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
+#Image.fromarray(pred.astype(np.uint8)).save('foo.py.png')
