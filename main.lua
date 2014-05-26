@@ -28,12 +28,12 @@ x1 = image.loadPNG('data/tsukuba1.png', 3, 'byte'):float():resize(1, 3, height, 
 -- ad volume
 ad_vol = torch.CudaTensor(1, disp_max, height, width)
 adcensus.ad(x0, x1, ad_vol)
-savePNG('report/img/absdiff.png', ad_vol)
+savePNG('absdiff.png', ad_vol)
 
 -- census volume
 census_vol = torch.CudaTensor(1, disp_max, height, width)
 adcensus.census(x0, x1, census_vol)
-savePNG('report/img/census.png', census_vol)
+savePNG('census.png', census_vol)
 
 -- adcensus volume
 function rho(c, lambda)
@@ -43,7 +43,7 @@ rho(ad_vol, ad_lambda)
 rho(census_vol, census_lambda)
 adcensus_vol = torch.CudaTensor(1, disp_max, height, width)
 adcensus_vol:add(ad_vol, 1, census_vol)
-savePNG('report/img/adcensus.png', adcensus_vol)
+savePNG('adcensus.png', adcensus_vol)
 
 os.exit()
 

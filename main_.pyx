@@ -1,6 +1,3 @@
-#cython: boundscheck=False
-#cython: wraparound=False
-
 import numpy as np
 cimport numpy as np
 
@@ -47,14 +44,10 @@ def census_transform(np.ndarray[np.float64_t, ndim=3] x):
             ind = 0
             for ii in range(i - 3, i + 4):
                 for jj in range(j - 4, j + 5):
-                    if 0 <= ii < height and 0 <= jj < width:
-                        for k in range(3):
+                    for k in range(3):
+                        if 0 <= ii < height and 0 <= jj < width:
                             cen[i, j, ind] = x[ii, jj, k] < x[i, j, k]
-                            ind += 1
-                    else:
-                        cen[i, j, ind + 0] = ne
-                        cen[i, j, ind + 1] = ne
-                        cen[i, j, ind + 2] = ne
-                        ind += 3
-            assert(ind == 63 * 3)
+                        else:
+                            cen[i, j, ind] = ne
+                        ind += 1
     return cen
