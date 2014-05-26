@@ -53,8 +53,12 @@ input_t = torch.CudaTensor(1, disp_max, width, height)
 output_t = torch.CudaTensor(1, disp_max, width, height)
 output = torch.CudaTensor(1, disp_max, height, width)
 
-for i = 1,4 do
+for i = 1,2 do
    adcensus.cbca(x0, x1, input, output, L1, L2, tau1, tau2)
-   input:copy(output)
-   savePNG(('report/img/cbca%d.png'):format(i), adcensus_vol)
+   input_t:copy(output:transpose(3, 4))
+   savePNG(('report/img/cbca%d.png'):format(i * 2 - 1), output)
+
+   adcensus.cbca(x0_t, x1_t, input_t, output_t, L1, L2, tau1, tau2)
+   input:copy(output_t:transpose(3, 4))
+   savePNG(('report/img/cbca%d.png'):format(i * 2), input)
 end
