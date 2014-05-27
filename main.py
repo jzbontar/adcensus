@@ -43,8 +43,9 @@ adcensus_vol = ad_vol_robust + census_vol_robust
 x0c = main_.cross(x0m)
 x1c = main_.cross(x1m)
 
-for i in range(4):
-    adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol)
+for i in range(2):
+    adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 1)
+    adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 0)
 
 pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
 Image.fromarray(pred.astype(np.uint8)).save('foo.png')

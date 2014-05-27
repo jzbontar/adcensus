@@ -1,5 +1,5 @@
-#cython: boundscheck=False
-#cython: wraparound=False
+#cython: boundscheck=True
+#cython: wraparound=True
 
 import numpy as np
 cimport numpy as np
@@ -7,8 +7,11 @@ cimport numpy as np
 cdef int height = 288 
 cdef int width = 384 
 cdef int disp_max = 16
-cdef int L = 17
-cdef int tau = 20
+
+cdef int L1 = 34
+cdef int L2 = 17
+cdef int tau1 = 20
+cdef int tau2 = 6
 
 def census(np.ndarray[np.float64_t, ndim=3] x0, np.ndarray[np.float64_t, ndim=3] x1):
     cdef np.ndarray[np.float64_t, ndim=3] vol
@@ -57,19 +60,33 @@ def census_transform(np.ndarray[np.float64_t, ndim=3] x):
                         ind += 1
     return cen
 
-cdef int cross_coditions(int i, int j, int ii, int jj, np.ndarray[np.float64_t, ndim=3] x):
+cdef int cross_coditions(int i, int j, int ii, int jj, int iii, int jjj,
+                         np.ndarray[np.float64_t, ndim=3] x):
     cdef double v0, v1, v2
 
-    if not (0 <= ii < height and 0 <= jj < width and abs(i - ii) < L and abs(j - jj) < L):
-        return 0
+    if not (0 <= ii < height and 0 <= jj < width): return 0
 
-    if abs(i - ii) == 1 or abs(j - jj) == 1:
-        return 1
+    if abs(i - ii) == 1 or abs(j - jj) == 1: return 1
 
-    v0 = abs(x[i, j, 0] - x[ii, jj, 0])
-    v1 = abs(x[i, j, 1] - x[ii, jj, 1])
-    v2 = abs(x[i, j, 2] - x[ii, jj, 2])
-    return max(v0, v1, v2) <= tau
+    # rule 1
+    if abs(x[ii,jj,0] - x[iii,jjj,0]) >= tau1: return 0
+    if abs(x[ii,jj,1] - x[iii,jjj,1]) >= tau1: return 0
+    if abs(x[ii,jj,2] - x[iii,jjj,2]) >= tau1: return 0
+
+    if abs(x[i,j,0] - x[ii,jj,0]) >= tau1: return 0
+    if abs(x[i,j,1] - x[ii,jj,1]) >= tau1: return 0
+    if abs(x[i,j,2] - x[ii,jj,2]) >= tau1: return 0
+
+    # rule 2
+    if abs(i - ii) > L1 or abs(j - jj) > L1: return 0
+
+    # rule 3
+    if abs(i - ii) > L2 or abs(j - jj) > L2:
+        if abs(x[i,j,0] - x[ii,jj,0]) >= tau2: return 0
+        if abs(x[i,j,1] - x[ii,jj,1]) >= tau2: return 0
+        if abs(x[i,j,2] - x[ii,jj,2]) >= tau2: return 0
+        
+    return 1
     
 
 def cross(np.ndarray[np.float64_t, ndim=3] x):
@@ -83,15 +100,16 @@ def cross(np.ndarray[np.float64_t, ndim=3] x):
             res[i,j,1] = i + 1
             res[i,j,2] = j - 1
             res[i,j,3] = j + 1
-            while cross_coditions(i, j, res[i,j,0], j, x): res[i,j,0] -= 1
-            while cross_coditions(i, j, res[i,j,1], j, x): res[i,j,1] += 1
-            while cross_coditions(i, j, i, res[i,j,2], x): res[i,j,2] -= 1
-            while cross_coditions(i, j, i, res[i,j,3], x): res[i,j,3] += 1
+            while cross_coditions(i,j,res[i,j,0],j,res[i,j,0]+1,j,x): res[i,j,0] -= 1
+            while cross_coditions(i,j,res[i,j,1],j,res[i,j,1]-1,j,x): res[i,j,1] += 1
+            while cross_coditions(i,j,i,res[i,j,2],i,res[i,j,2]+1,x): res[i,j,2] -= 1
+            while cross_coditions(i,j,i,res[i,j,3],i,res[i,j,3]-1,x): res[i,j,3] += 1
     return res
 
 def cbca(np.ndarray[np.int_t, ndim=3] x0c,
          np.ndarray[np.int_t, ndim=3] x1c,
-         np.ndarray[np.float64_t, ndim=3] vol):
+         np.ndarray[np.float64_t, ndim=3] vol,
+         int t):
     cdef np.ndarray[np.float64_t, ndim=3] res
     cdef int i, j, ii, jj, ii_s, ii_t, jj_s, jj_t, d, cnt
     cdef double sum
@@ -105,14 +123,26 @@ def cbca(np.ndarray[np.int_t, ndim=3] x0c,
                     continue
                 sum = 0
                 cnt = 0
-                ii_s = max(x0c[i,j,0], x1c[i,j-d,0]) + 1
-                ii_t = min(x0c[i,j,1], x1c[i,j-d,1])
-                for ii in range(ii_s, ii_t):
-                    jj_s = max(x0c[ii,j,2], x1c[ii,j-d,2] + d) + 1
-                    jj_t = min(x0c[ii,j,3], x1c[ii,j-d,3] + d)
+                if t:
+                    # horizontal then vertical
+                    jj_s = max(x0c[i,j,2], x1c[i,j-d,2] + d) + 1
+                    jj_t = min(x0c[i,j,3], x1c[i,j-d,3] + d)
                     for jj in range(jj_s, jj_t):
-                        sum += vol[d, ii, jj]
-                        cnt += 1
+                        ii_s = max(x0c[i,jj,0], x1c[i,jj-d,0]) + 1
+                        ii_t = min(x0c[i,jj,1], x1c[i,jj-d,1])
+                        for ii in range(ii_s, ii_t):
+                            sum += vol[d, ii, jj]
+                            cnt += 1
+                else:
+                    # vertical then horizontal
+                    ii_s = max(x0c[i,j,0], x1c[i,j-d,0]) + 1
+                    ii_t = min(x0c[i,j,1], x1c[i,j-d,1])
+                    for ii in range(ii_s, ii_t):
+                        jj_s = max(x0c[ii,j,2], x1c[ii,j-d,2] + d) + 1
+                        jj_t = min(x0c[ii,j,3], x1c[ii,j-d,3] + d)
+                        for jj in range(jj_s, jj_t):
+                            sum += vol[d, ii, jj]
+                            cnt += 1
                 assert(cnt > 0)
                 res[d, i, j] = sum / cnt
     return res
