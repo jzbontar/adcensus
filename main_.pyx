@@ -3,7 +3,7 @@ cimport numpy as np
 
 cdef int height = 288 
 cdef int width = 384 
-cdef int disp_max = 16 
+cdef int disp_max = 16
 cdef int L = 17
 cdef int tau = 20
 
@@ -105,8 +105,8 @@ def cbca(np.ndarray[np.int_t, ndim=3] x0c,
                 ii_s = max(x0c[i,j,0], x1c[i,j-d,0]) + 1
                 ii_t = min(x0c[i,j,1], x1c[i,j-d,1])
                 for ii in range(ii_s, ii_t):
-                    jj_s = max(x0c[i,j,2], x1c[i,j-d,2] + d) + 1
-                    jj_t = min(x0c[i,j,3], x1c[i,j-d,3] + d)
+                    jj_s = max(x0c[ii,j,2], x1c[ii,j-d,2] + d) + 1
+                    jj_t = min(x0c[ii,j,3], x1c[ii,j-d,3] + d)
                     for jj in range(jj_s, jj_t):
                         sum += vol[d, ii, jj]
                         cnt += 1
