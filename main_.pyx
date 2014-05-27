@@ -53,7 +53,7 @@ cdef int cross_coditions(int i, int j, int ii, int jj, int iii, int jjj,
     if abs(x[i,j,2] - x[ii,jj,2]) >= tau1: return 0
 
     # rule 2
-    if abs(i - ii) > L1 or abs(j - jj) > L1: return 0
+    if abs(i - ii) >= L1 or abs(j - jj) >= L1: return 0
 
     # rule 3
     if abs(i - ii) > L2 or abs(j - jj) > L2:
