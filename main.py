@@ -18,6 +18,19 @@ x1 = np.array(Image.open('data/tsukuba1.png'), dtype=np.float64)
 x0m = median_filter(x0, size=(3, 3, 1))
 x1m = median_filter(x1, size=(3, 3, 1))
 
+adcensus_vol = pickle.load(open('foo.bin'))
+
+v1 = main_.sgm(adcensus_vol)
+#v2 = main_.sgm(adcensus_vol[:,:,::-1])[:,:,::-1]
+#adcensus_volT = adcensus_vol.transpose((0,2,1))
+#v3 = main_.sgm(adcensus_volT).transpose((0,2,1))
+#v4 = main_.sgm(adcensus_volT[:,:,::-1])[:,:,::-1].transpose((0,2,1))
+#v = (v1 + v2 + v3 + v4) / 4
+
+pred = np.argmin(v1, 0).astype(np.float64) * 255 / disp_max
+Image.fromarray(pred.astype(np.uint8)).save('foo.png')
+sys.exit()
+
 # ad
 ad_vol = np.ones((disp_max, height, width)) * np.inf
 for i in range(disp_max):
@@ -44,8 +57,10 @@ x0c = main_.cross(x0m)
 x1c = main_.cross(x1m)
 
 for i in range(2):
-    adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 1)
     adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 0)
+    adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 1)
 
 pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
 Image.fromarray(pred.astype(np.uint8)).save('foo.png')
+
+pickle.dump(adcensus_vol, open('foo.bin', 'w'), -1)

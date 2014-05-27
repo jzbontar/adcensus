@@ -1,6 +1,9 @@
 #cython: boundscheck=True
 #cython: wraparound=True
 
+cdef extern from "math.h":
+    float INFINITY
+
 import numpy as np
 cimport numpy as np
 
@@ -118,3 +121,30 @@ def cbca(np.ndarray[np.int_t, ndim=3] x0c,
                 assert(cnt > 0)
                 res[d, i, j] = sum / cnt
     return res
+
+def sgm(np.ndarray[np.float64_t, ndim=3] vol):
+    cdef np.ndarray[np.float64_t, ndim=3] res
+
+    cdef int P1, P2, i, j, d
+    cdef double min_curr, min_prev
+
+    P1 = 1
+    P2 = 3
+
+    res = np.zeros((disp_max + 2, vol.shape[1], vol.shape[2] + 1))
+    res[0,:,:] = np.inf
+    res[disp_max + 1,:,:] = np.inf
+
+    for i in range(vol.shape[1]):
+        for j in range(1, vol.shape[2] + 1):
+            min_curr = INFINITY
+            for d in range(1, disp_max + 1):
+                res[d,i,j] = vol[d-1,i-1,j-1] - min_prev + min(
+                    res[d,i,j-1],
+                    res[d-1,i,j-1] + P1,
+                    res[d+1,i,j-1] + P1,
+                    min_prev + P2)
+                if res[d,i,j] < min_curr:
+                    min_curr = res[d,i,j]
+            min_prev = min_curr
+    return res[1:-1,:,1:]
