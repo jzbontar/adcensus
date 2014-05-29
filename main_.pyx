@@ -16,8 +16,8 @@ cdef int L2 = 17
 cdef int tau1 = 20
 cdef int tau2 = 6
 
-cdef float pi1 = 1.
-cdef float pi2 = 3.
+cdef double pi1 = 1.
+cdef double pi2 = 3.
 cdef int tau_so = 15
 
 def census_transform(np.ndarray[np.float64_t, ndim=3] x):
@@ -181,9 +181,9 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
                              abs(x1[i,j-d,1] - x1[i,j-d+1,1]),
                              abs(x1[i,j-d,2] - x1[i,j-d+1,2]))
                     if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1, pi2
-                    elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4, pi2 / 4
-                    elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4, pi2 / 4
-                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10, pi2 / 10
+                    elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4., pi2 / 4.
+                    elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4., pi2 / 4.
+                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10., pi2 / 10.
 
                     res[d,i,j] = vol[d,i,j] - min_prev + min(
                         res[d,i,j+1],
@@ -256,4 +256,3 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
     v3 = res
 
     return v0, v1, v2, v3
-
