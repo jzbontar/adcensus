@@ -22,23 +22,11 @@ adcensus_vol = pickle.load(open('foo.bin'))
 v0, v1, v2, v3 = main_.sgm(x0m, x1m, adcensus_vol)
 v = (v0 + v1 + v2 + v3) / 4
 
-pred = np.argmin(v0, 0).astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo0.png')
-
-pred = np.argmin(v1, 0).astype(np.float64) * 255 / disp_max
+pred = np.argmin(v, 0).astype(np.float64) * 255 / disp_max
 Image.fromarray(pred.astype(np.uint8)).save('foo1.png')
 
-pred = np.argmin(v2, 0).astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo2.png')
-
-pred = np.argmin(v3, 0).astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo3.png')
-
-pred = np.argmin(v, 0).astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo4.png')
-
 pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo.png')
+Image.fromarray(pred.astype(np.uint8)).save('foo2.png')
 
 sys.exit()
 
