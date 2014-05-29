@@ -255,4 +255,32 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
             min_prev = min_curr
     v3 = res
 
-    return v0, v1, v2, v3
+    return (v0 + v1 + v2 + v3) / 4
+
+def outlier_detection(np.ndarray[np.int_t, ndim=2] d0, 
+                      np.ndarray[np.int_t, ndim=2] d1):
+    cdef np.ndarray[np.int_t, ndim=2] res
+    cdef int i, j, d
+
+    res = np.empty_like(d0)
+    for i in range(height):
+        for j in range(width):
+            if d0[i,j] == d1[i,j - d0[i,j]]:
+                # not an outlier
+                res[i,j] = 0
+            else:
+                for d in range(disp_max):
+                    if j - d > 0 and d == d1[i,j - d]:
+                        # mismatch
+                        res[i,j] = 1
+                        break
+                else:
+                    # occlusion
+                    res[i,j] = 2
+    return res
+
+def iterative_region_voting(np.ndarray[np.float64_t, ndim=3] x0c,
+                            np.ndarray[np.float64_t, ndim=3] x1c,
+                            np.ndarray[np.int_t, ndim=2] d0,
+                            np.ndarray[np.int_t, ndim=2] outlier):
+    pass
