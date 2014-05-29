@@ -16,6 +16,10 @@ cdef int L2 = 17
 cdef int tau1 = 20
 cdef int tau2 = 6
 
+cdef float pi1 = 1.
+cdef float pi2 = 3.
+cdef int tau_so = 15
+
 def census_transform(np.ndarray[np.float64_t, ndim=3] x):
     cdef np.ndarray[np.int_t, ndim=3] cen
     cdef int i, j, ii, jj, k, ind, ne
@@ -122,29 +126,173 @@ def cbca(np.ndarray[np.int_t, ndim=3] x0c,
                 res[d, i, j] = sum / cnt
     return res
 
-def sgm(np.ndarray[np.float64_t, ndim=3] vol):
-    cdef np.ndarray[np.float64_t, ndim=3] res
 
-    cdef int P1, P2, i, j, d
-    cdef double min_curr, min_prev
+def sgm(np.ndarray[np.float64_t, ndim=3] x0,
+        np.ndarray[np.float64_t, ndim=3] x1,
+        np.ndarray[np.float64_t, ndim=3] vol):
+    cdef np.ndarray[np.float64_t, ndim=3] res, v0, v1, v2, v3
 
-    P1 = 1
-    P2 = 3
+    cdef int i, j, d
+    cdef double min_curr, min_prev, P1, P2, D1, D2
 
-    res = np.zeros((disp_max + 2, vol.shape[1], vol.shape[2] + 1))
-    res[0,:,:] = np.inf
-    res[disp_max + 1,:,:] = np.inf
-
-    for i in range(vol.shape[1]):
-        for j in range(1, vol.shape[2] + 1):
+    # left-right
+    res = np.empty_like(vol)
+    for i in range(height):
+        for j in range(width):
             min_curr = INFINITY
-            for d in range(1, disp_max + 1):
-                res[d,i,j] = vol[d-1,i-1,j-1] - min_prev + min(
-                    res[d,i,j-1],
-                    res[d-1,i,j-1] + P1,
-                    res[d+1,i,j-1] + P1,
-                    min_prev + P2)
+            for d in range(disp_max):
+                if j - d - 1 < 0:
+                    res[d,i,j] = vol[d,i,j]
+                else:
+                    D1 = max(abs(x0[i,j,0] - x0[i,j-1,0]),
+                             abs(x0[i,j,1] - x0[i,j-1,1]),
+                             abs(x0[i,j,2] - x0[i,j-1,2]))
+                    D2 = max(abs(x1[i,j-d,0] - x1[i,j-d-1,0]),
+                             abs(x1[i,j-d,1] - x1[i,j-d-1,1]),
+                             abs(x1[i,j-d,2] - x1[i,j-d-1,2]))
+                    if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1,      pi2
+                    elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4,  pi2 / 4
+                    elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4,  pi2 / 4
+                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10, pi2 / 10
+
+                    res[d,i,j] = vol[d,i,j] + min(
+                        res[d,i,j-1],
+                        res[d-1,i,j-1] + P1 if d-1 >= 0 else INFINITY,
+                        res[d+1,i,j-1] + P1 if d+1 < disp_max else INFINITY,
+                        min_prev + P2) - min_prev
                 if res[d,i,j] < min_curr:
                     min_curr = res[d,i,j]
             min_prev = min_curr
-    return res[1:-1,:,1:]
+    v0 = res
+
+    # right-left
+    res = np.empty_like(vol)
+    for i in range(height):
+        for j in range(width - 1, -1, -1):
+            min_curr = INFINITY
+            for d in range(disp_max):
+                if j + 1 >= width or j - d + 1 < 0:
+                    res[d,i,j] = vol[d,i,j]
+                else:
+                    D1 = max(abs(x0[i,j,0] - x0[i,j+1,0]),
+                             abs(x0[i,j,1] - x0[i,j+1,1]),
+                             abs(x0[i,j,2] - x0[i,j+1,2]))
+                    D2 = max(abs(x1[i,j-d,0] - x1[i,j-d+1,0]),
+                             abs(x1[i,j-d,1] - x1[i,j-d+1,1]),
+                             abs(x1[i,j-d,2] - x1[i,j-d+1,2]))
+                    if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1, pi2
+                    elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4, pi2 / 4
+                    elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4, pi2 / 4
+                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10, pi2 / 10
+
+                    res[d,i,j] = vol[d,i,j] - min_prev + min(
+                        res[d,i,j+1],
+                        res[d-1,i,j+1] + P1 if d-1 >= 0 else INFINITY,
+                        res[d+1,i,j+1] + P1 if d+1 < disp_max else INFINITY,
+                        min_prev + P2)
+                if res[d,i,j] < min_curr:
+                    min_curr = res[d,i,j]
+            min_prev = min_curr
+    v1 = res
+
+    # up-down
+    res = np.empty_like(vol)
+    for j in range(width):
+        for i in range(height):
+            min_curr = INFINITY
+            for d in range(disp_max):
+                if j - d < 0 or i - 1 < 0:
+                    res[d,i,j] = vol[d,i,j]
+                else:
+                    D1 = max(abs(x0[i,j,0] - x0[i-1,j,0]),
+                             abs(x0[i,j,1] - x0[i-1,j,1]),
+                             abs(x0[i,j,2] - x0[i-1,j,2]))
+                    D2 = max(abs(x1[i,j-d,0] - x1[i-1,j-d,0]),
+                             abs(x1[i,j-d,1] - x1[i-1,j-d,1]),
+                             abs(x1[i,j-d,2] - x1[i-1,j-d,2]))
+                    if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1, pi2
+                    elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4, pi2 / 4
+                    elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4, pi2 / 4
+                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10, pi2 / 10
+
+                    res[d,i,j] = vol[d,i,j] - min_prev + min(
+                        res[d,i-1,j],
+                        res[d-1,i-1,j] + P1 if d-1 >= 0 else INFINITY,
+                        res[d+1,i-1,j] + P1 if d+1 < disp_max else INFINITY,
+                        min_prev + P2)
+                if res[d,i,j] < min_curr:
+                    min_curr = res[d,i,j]
+            min_prev = min_curr
+    v2 = res
+
+    # down-up
+    res = np.empty_like(vol)
+    for j in range(width):
+        for i in range(height - 1, -1, -1):
+            min_curr = INFINITY
+            for d in range(disp_max):
+                if j - d < 0 or i + 1 >= height:
+                    res[d,i,j] = vol[d,i,j]
+                else:
+                    D1 = max(abs(x0[i,j,0] - x0[i+1,j,0]),
+                             abs(x0[i,j,1] - x0[i+1,j,1]),
+                             abs(x0[i,j,2] - x0[i+1,j,2]))
+                    D2 = max(abs(x1[i,j-d,0] - x1[i+1,j-d,0]),
+                             abs(x1[i,j-d,1] - x1[i+1,j-d,1]),
+                             abs(x1[i,j-d,2] - x1[i+1,j-d,2]))
+                    if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1, pi2
+                    elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4, pi2 / 4
+                    elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4, pi2 / 4
+                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10, pi2 / 10
+
+                    res[d,i,j] = vol[d,i,j] - min_prev + min(
+                        res[d,i+1,j],
+                        res[d-1,i+1,j] + P1 if d-1 >= 0 else INFINITY,
+                        res[d+1,i+1,j] + P1 if d+1 < disp_max else INFINITY,
+                        min_prev + P2)
+                if res[d,i,j] < min_curr:
+                    min_curr = res[d,i,j]
+            min_prev = min_curr
+    v3 = res
+
+    return v0, v1, v2, v3
+
+
+def sgm1(np.ndarray[np.float64_t, ndim=3] x0,
+         np.ndarray[np.float64_t, ndim=3] x1,
+         np.ndarray[np.float64_t, ndim=3] vol):
+    
+    cdef np.ndarray[np.float64_t, ndim=3] res
+
+    cdef int i, j, d
+    cdef double min_curr, min_prev, P1, P2, D1, D2
+
+    res = np.empty_like(vol)
+    for j in range(width):
+        for i in range(height):
+            min_curr = INFINITY
+            for d in range(disp_max):
+                if i - 1 < 0 or j - d < 0:
+                    res[d,i,j] = vol[d,i,j]
+                else:
+                    D1 = max(abs(x0[i,j,0] - x0[i-1,j,0]),
+                             abs(x0[i,j,1] - x0[i-1,j,1]),
+                             abs(x0[i,j,2] - x0[i-1,j,2]))
+                    D2 = max(abs(x1[i,j-d,0] - x0[i-1,j-d,0]),
+                             abs(x1[i,j-d,1] - x0[i-1,j-d,1]),
+                             abs(x1[i,j-d,2] - x0[i-1,j-d,2]))
+                    if D1 < tau_so and D2 < tau_so: P1 = pi1; P2 = pi2 
+                    if D1 >= tau_so and D2 < tau_so: P1 = pi1/4; P2 = pi2/4
+                    if D1 < tau_so and D2 >= tau_so: P1 = pi1/4; P2 = pi2/4
+                    if D1 >= tau_so and D2 >= tau_so: P1 = pi1/10; P2 = pi2/10
+
+                    res[d,i,j] = vol[d,i,j] + min(
+                        res[d,i-1,j],
+                        res[d-1,i-1,j] + P1 if d-1 >= 0 else INFINITY,
+                        res[d+1,i-1,j] + P1 if d+1 < disp_max else INFINITY,
+                        min_prev + P2) - min_prev
+                if res[d,i,j] < min_curr:
+                    min_curr = res[d,i,j]
+            min_prev = min_curr
+    return res
+                
