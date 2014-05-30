@@ -76,4 +76,3 @@ d0 = main_.proper_interpolation(x0m, d0, outlier)
 
 pred = d0.astype(np.float64) * 255 / disp_max
 Image.fromarray(pred.astype(np.uint8)).save('foo2.png')
-

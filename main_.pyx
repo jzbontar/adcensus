@@ -330,22 +330,23 @@ def proper_interpolation(np.ndarray[np.float64_t, ndim=3] x0,
     cdef double min_val, di, dj, ii_d, jj_d, dist
 
     dir = np.array([
-        [1,    -1],
-        [1,    -0.5],
-        [1,     0],
-        [1,     0.5],
-        [1,     1],
-        [0.5,   1],
-        [0,     1],
-        [-0.5,  1],
-        [-1,    1],
-        [-1,    0.5],
-        [-1,    0],
+        [-0.5, -1],
         [-1,   -0.5],
         [-1,   -1],
-        [-0.5, -1],
         [0,    -1],
         [0.5 , -1],
+        [1,    -0.5],
+        [1,    -1],
+        [-1,    0],
+        [1,     0],
+
+        [-1,    0.5],
+        [-1,    1],
+        [-0.5,  1],
+        [0,     1],
+        [0.5,   1],
+        [1,     0.5],
+        [1,     1],
     ])
 
     d0_res = np.empty_like(d0)
@@ -355,7 +356,7 @@ def proper_interpolation(np.ndarray[np.float64_t, ndim=3] x0,
             if outlier[i,j] != 0:
                 min_val = INFINITY
                 min_d = -1
-                for d in range(dir.shape[0]):
+                for d in range(16 if outlier[i,j] == 1 else 9):
                     di, dj = dir[d,0], dir[d,1]
                     ii_d, jj_d = i, j
                     ii, jj = round(ii_d), round(jj_d)
