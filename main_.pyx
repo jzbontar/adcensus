@@ -441,4 +441,3 @@ def subpixel_enchancement(np.ndarray[np.int_t, ndim=2] d0,
                 if denom > 1e-5:
                     d0_res[i,j] = d - min(1, max(-1, (cp - cn) / denom))
     return d0_res
-

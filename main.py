@@ -16,6 +16,9 @@ def match(x0, x1):
     x0m = median_filter(x0, size=(3, 3, 1))
     x1m = median_filter(x1, size=(3, 3, 1))
 
+    Image.fromarray(x0m.astype(np.uint8)).save('foo.png')
+    sys.exit()
+
     # ad
     ad_vol = np.ones((disp_max, height, width)) * np.inf
     for i in range(disp_max):
@@ -49,35 +52,27 @@ def match(x0, x1):
     c2_vol = main_.sgm(x0m, x1m, adcensus_vol)
     return c2_vol
 
-#x0 = np.array(Image.open('data/tsukuba0.png'), dtype=np.float64)
-#x1 = np.array(Image.open('data/tsukuba1.png'), dtype=np.float64)
-#x0m = median_filter(x0, size=(3, 3, 1))
-#x1m = median_filter(x1, size=(3, 3, 1))
-#x0c = main_.cross(x0m)
-#x1c = main_.cross(x1m)
-#
-#c2_0 = match(x0, x1)
-#c2_1 = match(x1[:,::-1], x0[:,::-1])[:,:,::-1]
-#pickle.dump((x0m, x1m, x0c, x1c, c2_0, c2_1), open('foo.bin', 'w'), -1)
-x0m, x1m, x0c, x1c, c2_0, c2_1 = pickle.load(open('foo.bin'))
+x0 = np.array(Image.open('data/tsukuba0.png'), dtype=np.float64)
+x1 = np.array(Image.open('data/tsukuba1.png'), dtype=np.float64)
+x0m = median_filter(x0, size=(3, 3, 1))
+x1m = median_filter(x1, size=(3, 3, 1))
+x0c = main_.cross(x0m)
+x1c = main_.cross(x1m)
+
+c2_0 = match(x0, x1)
+c2_1 = match(x1[:,::-1], x0[:,::-1])[:,:,::-1]
 
 d0 = np.argmin(c2_0, 0)
 d1 = np.argmin(c2_1, 0)
 
 outlier = main_.outlier_detection(d0, d1)
-
 for i in range(5):
     d0, outlier = main_.iterative_region_voting(x0c, x1c, d0, outlier)
-
 d0 = main_.proper_interpolation(x0m, d0, outlier)
 d0 = main_.depth_discontinuity_adjustment(d0, c2_0)
 d0 = main_.subpixel_enchancement(d0, c2_0)
-
-pred = d0.astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo1.png')
-
 d0 = median_filter(d0, size=3)
 
 pred = d0.astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo2.png')
+Image.fromarray(pred.astype(np.uint8)).save('foo.png')
 

@@ -220,9 +220,62 @@ int cbca(lua_State *L)
     return 0;
 }
 
+/* median 3x3 filter */
+__global__ void median3(float *img, float *out, int size, int height, int width)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		const int x = id % width;
+		const int y = id / width;
+
+		float w[9] = {
+			y == 0          || x == 0         ? 0 : img[id - width - 1],
+			y == 0                            ? 0 : img[id - width],
+			y == 0          || x == width - 1 ? 0 : img[id - width + 1],
+			                   x == 0         ? 0 : img[id         - 1],
+			                                        img[id],
+			                   x == width - 1 ? 0 : img[id         + 1],
+			y == height - 1 || x == 0         ? 0 : img[id + width - 1],
+			y == height - 1                   ? 0 : img[id + width],
+			y == height - 1 || x == width - 1 ? 0 : img[id + width + 1]
+		};
+
+		for (int i = 0; i < 5; i++) {
+			float tmp = w[i];
+			int idx = i;
+			for (int j = i + 1; j < 9; j++) {
+				if (w[j] < tmp) {
+					idx = j;
+					tmp = w[j];
+				}
+			}
+			w[idx] = w[i];
+			w[i] = tmp;
+		}
+
+		out[id] = w[4];
+	}
+}
+
+int median3(lua_State *L)
+{
+	THCudaTensor *img = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+
+	median3<<<(THCudaTensor_nElement(img) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(img),
+		THCudaTensor_data(out),
+		THCudaTensor_nElement(img),
+		THCudaTensor_size(img, 2),
+		THCudaTensor_size(img, 3));
+
+	checkCudaError(L);
+	return 0;
+}
 
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
+	{"median3", median3},
 	{"census", census},
 	{"cbca", cbca},
 	{"spatial_argmin", spatial_argmin},
