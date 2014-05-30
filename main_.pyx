@@ -1,9 +1,10 @@
 #cython: boundscheck=True
-#cython: wraparound=True
+#cython: wraparound=False
 
 cdef extern from "math.h":
     float INFINITY
 
+import sys
 import numpy as np
 cimport numpy as np
 
@@ -19,6 +20,9 @@ cdef int tau2 = 6
 cdef double pi1 = 1.
 cdef double pi2 = 3.
 cdef int tau_so = 15
+
+cdef int tau_s = 20
+cdef double tau_h = 0.4
 
 def census_transform(np.ndarray[np.float64_t, ndim=3] x):
     cdef np.ndarray[np.int_t, ndim=3] cen
@@ -171,7 +175,7 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
         for j in range(width - 1, -1, -1):
             min_curr = INFINITY
             for d in range(disp_max):
-                if j + 1 >= width or j - d + 1 < 0:
+                if j + 1 >= width or j - d < 0:
                     res[d,i,j] = vol[d,i,j]
                 else:
                     D1 = max(abs(x0[i,j,0] - x0[i,j+1,0]),
@@ -259,28 +263,56 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
 
 def outlier_detection(np.ndarray[np.int_t, ndim=2] d0, 
                       np.ndarray[np.int_t, ndim=2] d1):
-    cdef np.ndarray[np.int_t, ndim=2] res
+    cdef np.ndarray[np.int_t, ndim=2] outlier
     cdef int i, j, d
 
-    res = np.empty_like(d0)
+    outlier = np.empty_like(d0)
     for i in range(height):
         for j in range(width):
             if d0[i,j] == d1[i,j - d0[i,j]]:
                 # not an outlier
-                res[i,j] = 0
+                outlier[i,j] = 0
             else:
                 for d in range(disp_max):
                     if j - d > 0 and d == d1[i,j - d]:
                         # mismatch
-                        res[i,j] = 1
+                        outlier[i,j] = 1
                         break
                 else:
                     # occlusion
-                    res[i,j] = 2
-    return res
+                    outlier[i,j] = 2
+    return outlier
 
-def iterative_region_voting(np.ndarray[np.float64_t, ndim=3] x0c,
-                            np.ndarray[np.float64_t, ndim=3] x1c,
+def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
+                            np.ndarray[np.int_t, ndim=3] x1c,
                             np.ndarray[np.int_t, ndim=2] d0,
                             np.ndarray[np.int_t, ndim=2] outlier):
-    pass
+
+    cdef np.ndarray[np.int_t, ndim=1] hist
+    cdef np.ndarray[np.int_t, ndim=2] d0_res, outlier_res
+    cdef int i, j, ii, jj, ii_s, ii_t, jj_s, jj_t, d,
+
+    hist = np.empty(disp_max, dtype=int)
+    d0_res = np.empty_like(d0)
+    outlier_res = np.empty_like(outlier)
+    for i in range(height):
+        for j in range(width):
+            d = d0[i,j]
+            d0_res[i,j] = d
+            outlier_res[i,j] = outlier[i,j]
+            if j - d < 0:
+                continue
+            hist.fill(0)
+            ii_s = max(x0c[i,j,0], x1c[i,j-d,0]) + 1
+            ii_t = min(x0c[i,j,1], x1c[i,j-d,1])
+            for ii in range(ii_s, ii_t):
+                jj_s = max(x0c[ii,j,2], x1c[ii,j-d,2] + d) + 1
+                jj_t = min(x0c[ii,j,3], x1c[ii,j-d,3] + d)
+                for jj in range(jj_s, jj_t):
+                    if outlier[ii,jj] == 0:
+                        hist[d0[ii,jj]] += 1
+            d = hist.argmax()
+            if hist.sum() > tau_s and float(hist[d]) / hist.sum() > tau_h:
+                outlier_res[i,j] = 0
+                d0_res[i,j] = d
+    return d0_res, outlier_res

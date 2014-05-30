@@ -19,11 +19,11 @@ def match(x0, x1):
     # ad
     ad_vol = np.ones((disp_max, height, width)) * np.inf
     for i in range(disp_max):
-        ad_vol[i,:,i:] = np.mean(np.abs(x0[:,i:] - x1[:,:width - i]), 2)
+        ad_vol[i,:,i:] = np.mean(np.abs(x0m[:,i:] - x1m[:,:width - i]), 2)
 
     # census
-    x0c = main_.census_transform(x0)
-    x1c = main_.census_transform(x1)
+    x0c = main_.census_transform(x0m)
+    x1c = main_.census_transform(x1m)
     census_vol = np.ones((disp_max, height, width)) * np.inf
     for i in range(disp_max):
         census_vol[i,:,i:] = np.sum(x0c[:,i:] != x1c[:,:width - i], 2)
@@ -46,23 +46,29 @@ def match(x0, x1):
         adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 1)
 
     # semi-global matching
-    c2_vol = main_.sgm(x0, x1, adcensus_vol)
-
+    c2_vol = main_.sgm(x0m, x1m, adcensus_vol)
     return c2_vol
 
-x0 = np.array(Image.open('data/tsukuba0.png'), dtype=np.float64)
-x1 = np.array(Image.open('data/tsukuba1.png'), dtype=np.float64)
-
+#x0 = np.array(Image.open('data/tsukuba0.png'), dtype=np.float64)
+#x1 = np.array(Image.open('data/tsukuba1.png'), dtype=np.float64)
+#x0m = median_filter(x0, size=(3, 3, 1))
+#x1m = median_filter(x1, size=(3, 3, 1))
+#x0c = main_.cross(x0m)
+#x1c = main_.cross(x1m)
+#
 #c2_0 = match(x0, x1)
 #c2_1 = match(x1[:,::-1], x0[:,::-1])[:,:,::-1]
-#pickle.dump((c2_0, c2_1), open('foo.bin', 'w'), -1)
+#pickle.dump((x0m, x1m, x0c, x1c, c2_0, c2_1), open('foo.bin', 'w'), -1)
 
-c2_0, c2_1 = pickle.load(open('foo.bin'))
+x0m, x1m, x0c, x1c, c2_0, c2_1 = pickle.load(open('foo.bin'))
 
 d0 = np.argmin(c2_0, 0)
 d1 = np.argmin(c2_1, 0)
 
-main_.outlier_detection(d0, d1)
+outlier = main_.outlier_detection(d0, d1)
 
-#pred = np.argmin(c2_1, 0).astype(np.float64) * 255 / disp_max
-#Image.fromarray(pred.astype(np.uint8)).save('foo2.png')
+for i in range(5):
+    d0, outlier = main_.iterative_region_voting(x0c, x1c, d0, outlier)
+    pred = d0.astype(np.float64) * 255 / disp_max
+    Image.fromarray(pred.astype(np.uint8)).save('foo%d.png' % i)
+
