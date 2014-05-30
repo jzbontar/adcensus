@@ -388,7 +388,8 @@ def proper_interpolation(np.ndarray[np.float64_t, ndim=3] x0,
 
 def depth_discontinuity_adjustment(np.ndarray[np.int_t, ndim=2] d0,
                                    np.ndarray[np.float_t, ndim=3] vol):
-    cdef np.ndarray[np.int_t, ndim=2] d0_res
+    cdef np.ndarray[np.int_t, ndim=2] d0_res, d0s
+    cdef int i, j, d
 
     # horizontal
     d0_res = np.empty_like(d0)
