@@ -47,23 +47,20 @@ rho(census_vol, census_lambda)
 adcensus_vol = torch.CudaTensor(1, disp_max, height, width)
 adcensus_vol:add(ad_vol, 1, census_vol)
 
-savePNG('bar.png', adcensus_vol)
-os.exit()
+-- cross computation
+x0c = torch.CudaTensor(1, 4, height, width)
+x1c = torch.CudaTensor(1, 4, height, width)
+adcensus.cross(x0m, adcensus_vol, x0c, L1, L2, tau1, tau2)
+adcensus.cross(x1m, adcensus_vol, x1c, L1, L2, tau1, tau2)
 
--- cbca
-x0_t = torch.CudaTensor(1, 3, width, height):copy(x0:transpose(3, 4))
-x1_t = torch.CudaTensor(1, 3, width, height):copy(x1:transpose(3, 4))
-input = adcensus_vol
-input_t = torch.CudaTensor(1, disp_max, width, height)
-output_t = torch.CudaTensor(1, disp_max, width, height)
-output = torch.CudaTensor(1, disp_max, height, width)
-
-for i = 1,2 do
-   adcensus.cbca(x0, x1, input, output, L1, L2, tau1, tau2)
-   input_t:copy(output:transpose(3, 4))
-   savePNG(('report/img/cbca%d.png'):format(i * 2 - 1), output)
-
-   adcensus.cbca(x0_t, x1_t, input_t, output_t, L1, L2, tau1, tau2)
-   input:copy(output_t:transpose(3, 4))
-   savePNG(('report/img/cbca%d.png'):format(i * 2), input)
+math.randomseed(os.time())
+x, y = math.random(1,width), math.random(1,height)
+for i = x0c[{1,3,y,x}] + 1, x0c[{1,4,y,x}] - 1 do
+   for j = x0c[{1,1,i+1,x}] + 1, x0c[{1,2,i+1,x}] - 1 do
+      x0[{1,{},i+1,j+1}] = 255
+   end
 end
+
+image.savePNG('bar.png', x0[1]:div(255))
+
+-- savePNG('bar.png', adcensus_vol)

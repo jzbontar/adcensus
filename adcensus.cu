@@ -151,75 +151,6 @@ int spatial_argmin(lua_State *L)
 	return 0;
 }
 
-#define CBCA_CONDITIONS(xx, yy, xxx, yyy) (\
-    0 <= (yy) && (yy) < size2 && \
-    0 <= (xx) && (xx) < size3 && \
-    fabsf(x0[(yy) * size3 + (xx)] - x0[(yyy) * size3 + (xxx)]) < tau1 && ((\
-		fabsf((xx) - x) + fabsf((yy) - y) < L1 && \
-		fabsf(x0[(yy) * size3 + (xx)] - x0[y * size3 + x]) < tau2 && \
-		fabsf(x1[(yy) * size3 + (xx) - d] - x1[y * size3 + x - d]) < tau2) || (\
-		fabsf((xx) - x) + fabsf((yy) - y) < L2 && \
-		fabsf(x0[(yy) * size3 + (xx)] - x0[y * size3 + x]) < tau1 && \
-		fabsf(x1[(yy) * size3 + (xx) - d] - x1[y * size3 + x - d]) < tau1)))
-
-__global__ void cbca(float *x0, float *x1, float *vol, float *vol_out, int size, int size2, int size3, int L1, int L2, float tau1, float tau2)
-{
-    int output_id = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (output_id < size) {
-		int d = output_id;
-        const int x = d % size3;
-        d /= size3;
-        const int y = d % size2;
-        d /= size2;
-
-        int yn, ys;
-        for (yn = y - 1; CBCA_CONDITIONS(x, yn, x, yn + 1); yn--) {};
-        for (ys = y + 1; CBCA_CONDITIONS(x, ys, x, ys - 1); ys++) {};
-
-        float sum = 0;
-        int cnt = 0;
-
-        /* output */
-        for (int yy = yn + 1; yy < ys; yy++) {
-            int xe, xw;
-            for (xe = x - 1; CBCA_CONDITIONS(xe, yy, xe + 1, yy); xe--) {};
-            for (xw = x + 1; CBCA_CONDITIONS(xw, yy, xw - 1, yy); xw++) {};
-
-            for (int xx = xe + 1; xx < xw; xx++) {
-				sum += vol[(d * size2 + yy) * size3 + xx];
-				cnt++;
-            }
-        }
-		vol_out[output_id] = sum / cnt;
-	}
-}
-
-/* cross-based cost aggregation */
-int cbca(lua_State *L)
-{
-    THCudaTensor *x0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
-    THCudaTensor *x1 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
-    THCudaTensor *vol = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
-    THCudaTensor *vol_out = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
-    int L1 = luaL_checkinteger(L, 5);
-    int L2 = luaL_checkinteger(L, 6);
-    float tau1 = luaL_checknumber(L, 7);
-    float tau2 = luaL_checknumber(L, 8);
-
-    cbca<<<(THCudaTensor_nElement(vol) - 1) / TB + 1, TB>>>(
-        THCudaTensor_data(x0),
-        THCudaTensor_data(x1),
-        THCudaTensor_data(vol),
-        THCudaTensor_data(vol_out),
-        THCudaTensor_nElement(vol),
-        THCudaTensor_size(x0, 2),
-        THCudaTensor_size(x0, 3),
-        L1, L2, tau1, tau2);
-    checkCudaError(L);
-    return 0;
-}
-
 /* median 3x3 filter */
 __global__ void median3(float *img, float *out, int size, int height, int width)
 {
@@ -268,16 +199,118 @@ int median3(lua_State *L)
 		THCudaTensor_nElement(img),
 		THCudaTensor_size(img, 2),
 		THCudaTensor_size(img, 3));
+	checkCudaError(L);
+	return 0;
+}
+
+__global__ void cross(float *x0, float *vol, float *out, int size, int dim2, int dim3, int L1, int L2, float tau1, float tau2)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		int dir = id;
+		int x = dir % dim3;
+		dir /= dim3;
+		int y = dir % dim2;
+		dir /= dim2;
+
+		int dx = 0;
+		int dy = 0;
+		if (dir == 0) {
+			dx = -1;
+		} else if (dir == 1) {
+			dx = 1;
+		} else if (dir == 2) {
+			dy = -1;
+		} else if (dir == 3) {
+			dy = 1;
+		} else {
+			assert(0);
+		}
+
+		int xx, yy, ind1, ind2, ind3, dist;
+		int dim23 = dim2 * dim3;
+		ind1 = y * dim3 + x;
+		for (xx = x + dx, yy = y + dy;;xx += dx, yy += dy) {
+			if (xx < 0 || xx >= dim3 || yy < 0 || yy >= dim2) break;
+
+			dist = max(abs(xx - x), abs(yy - y));
+			if (dist == 1) continue;
+
+			/* rule 1 */
+			ind2 = yy * dim3 + xx;
+			ind3 = (yy - dy) * dim3 + (xx - dx);
+
+			if (abs(x0[0 * dim23 + ind1] - x0[0 * dim23 + ind2]) >= tau1) break;
+			if (abs(x0[1 * dim23 + ind1] - x0[1 * dim23 + ind2]) >= tau1) break;
+			if (abs(x0[2 * dim23 + ind1] - x0[2 * dim23 + ind2]) >= tau1) break;
+
+			if (abs(x0[0 * dim23 + ind2] - x0[0 * dim23 + ind3]) >= tau1) break;
+			if (abs(x0[1 * dim23 + ind2] - x0[1 * dim23 + ind3]) >= tau1) break;
+			if (abs(x0[2 * dim23 + ind2] - x0[2 * dim23 + ind3]) >= tau1) break;
+
+			/* rule 2 */
+			if (dist >= L1) break;
+
+			/* rule 3 */
+			if (dist >= L2) {
+				if (abs(x0[0 * dim23 + ind1] - x0[0 * dim23 + ind2]) >= tau2) break;
+				if (abs(x0[1 * dim23 + ind1] - x0[1 * dim23 + ind2]) >= tau2) break;
+				if (abs(x0[2 * dim23 + ind1] - x0[2 * dim23 + ind2]) >= tau2) break;
+			}
+		}
+		out[id] = dir <= 1 ? xx : yy;
+	}
+}
+
+int cross(lua_State *L)
+{
+	THCudaTensor *x0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *vol = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	int L1 = luaL_checkinteger(L, 4);
+	int L2 = luaL_checkinteger(L, 5);
+	float tau1 = luaL_checknumber(L, 6);
+	float tau2 = luaL_checknumber(L, 7);
+
+	cross<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(x0),
+		THCudaTensor_data(vol),
+		THCudaTensor_data(out),
+		THCudaTensor_nElement(out),
+		THCudaTensor_size(out, 2),
+		THCudaTensor_size(out, 3),
+		L1, L2, tau1, tau2);
 
 	checkCudaError(L);
+	return 0;
+}
+
+
+__global__ void cbca(float *x0c, float *x1c, float *vol, float *out, int size)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		
+	}
+}
+
+
+int cbca(lua_State *L)
+{
+	THCudaTensor *x0c = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *x1c = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *vol = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
+
+	checkCudaError(L)
 	return 0;
 }
 
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
 	{"median3", median3},
+	{"cross", cross},
 	{"census", census},
-	{"cbca", cbca},
 	{"spatial_argmin", spatial_argmin},
 	{NULL, NULL}
 };
