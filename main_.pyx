@@ -319,3 +319,65 @@ def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
                 outlier_res[i,j] = 0
                 d0_res[i,j] = d
     return d0_res, outlier_res
+
+def proper_interpolation(np.ndarray[np.float64_t, ndim=3] x0,
+                         np.ndarray[np.int_t, ndim=2] d0,
+                         np.ndarray[np.int_t, ndim=2] outlier):
+
+    cdef np.ndarray[np.float64_t, ndim=2] dir
+    cdef np.ndarray[np.int_t, ndim=2] d0_res
+    cdef int i, j, ii, jj, min_d, d
+    cdef double min_val, di, dj, ii_d, jj_d, dist
+
+    dir = np.array([
+        [1,    -1],
+        [1,    -0.5],
+        [1,     0],
+        [1,     0.5],
+        [1,     1],
+        [0.5,   1],
+        [0,     1],
+        [-0.5,  1],
+        [-1,    1],
+        [-1,    0.5],
+        [-1,    0],
+        [-1,   -0.5],
+        [-1,   -1],
+        [-0.5, -1],
+        [0,    -1],
+        [0.5 , -1],
+    ])
+
+    d0_res = np.empty_like(d0)
+    for i in range(height):
+        for j in range(width):
+            d0_res[i,j] = d0[i,j]
+            if outlier[i,j] != 0:
+                min_val = INFINITY
+                min_d = -1
+                for d in range(dir.shape[0]):
+                    di, dj = dir[d,0], dir[d,1]
+                    ii_d, jj_d = i, j
+                    ii, jj = round(ii_d), round(jj_d)
+                    while 0 <= ii < height and 0 <= jj < width and outlier[ii,jj] != 0:
+                        ii_d += di
+                        jj_d += dj
+                        ii, jj = round(ii_d), round(jj_d)
+                    if 0 <= ii < height and 0 <= jj < width:
+                        assert(outlier[ii,jj] == 0)
+                        if outlier[i,j] == 1:
+                            # mismatch
+                            dist = max(abs(x0[i,j,0] - x0[ii,jj,0]),
+                                       abs(x0[i,j,1] - x0[ii,jj,1]),
+                                       abs(x0[i,j,2] - x0[ii,jj,2]))
+                        elif outlier[i,j] == 2:
+                            # occlusion
+                            dist = d0[ii,jj]
+                        else: assert(False)
+
+                        if dist < min_val:
+                            min_val = dist
+                            min_d = d0[ii,jj]
+                assert(min_d != -1)
+                d0_res[i,j] = min_d
+    return d0_res
