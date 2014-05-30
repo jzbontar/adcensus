@@ -16,9 +16,6 @@ def match(x0, x1):
     x0m = median_filter(x0, size=(3, 3, 1))
     x1m = median_filter(x1, size=(3, 3, 1))
 
-    Image.fromarray(x0m.astype(np.uint8)).save('foo.png')
-    sys.exit()
-
     # ad
     ad_vol = np.ones((disp_max, height, width)) * np.inf
     for i in range(disp_max):
@@ -39,6 +36,11 @@ def match(x0, x1):
     ad_vol_robust = rho(ad_vol, 10)
     census_vol_robust = rho(census_vol, 30)
     adcensus_vol = ad_vol_robust + census_vol_robust
+
+    pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
+    Image.fromarray(pred.astype(np.uint8)).save('foo.png')
+    sys.exit()
+
 
     # cbca
     x0c = main_.cross(x0m)

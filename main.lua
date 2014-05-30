@@ -26,21 +26,17 @@ x0 = image.loadPNG('data/tsukuba0.png', 3, 'byte'):float():resize(1, 3, height, 
 x1 = image.loadPNG('data/tsukuba1.png', 3, 'byte'):float():resize(1, 3, height, width):cuda()
 
 x0m = torch.CudaTensor():resizeAs(x0)
+x1m = torch.CudaTensor():resizeAs(x1)
 adcensus.median3(x0, x0m)
-image.savePNG('bar.png', x0m[1]:div(255))
-os.exit()
-
+adcensus.median3(x1, x1m)
 
 -- ad volume
 ad_vol = torch.CudaTensor(1, disp_max, height, width)
-adcensus.ad(x0, x1, ad_vol)
-savePNG('absdiff.png', ad_vol)
-
+adcensus.ad(x0m, x1m, ad_vol)
 
 -- census volume
 census_vol = torch.CudaTensor(1, disp_max, height, width)
-adcensus.census(x0, x1, census_vol)
-savePNG('census.png', census_vol)
+adcensus.census(x0m, x1m, census_vol)
 
 -- adcensus volume
 function rho(c, lambda)
@@ -50,8 +46,8 @@ rho(ad_vol, ad_lambda)
 rho(census_vol, census_lambda)
 adcensus_vol = torch.CudaTensor(1, disp_max, height, width)
 adcensus_vol:add(ad_vol, 1, census_vol)
-savePNG('adcensus.png', adcensus_vol)
 
+savePNG('bar.png', adcensus_vol)
 os.exit()
 
 -- cbca
