@@ -59,7 +59,6 @@ def match(x0, x1):
 #c2_0 = match(x0, x1)
 #c2_1 = match(x1[:,::-1], x0[:,::-1])[:,:,::-1]
 #pickle.dump((x0m, x1m, x0c, x1c, c2_0, c2_1), open('foo.bin', 'w'), -1)
-
 x0m, x1m, x0c, x1c, c2_0, c2_1 = pickle.load(open('foo.bin'))
 
 d0 = np.argmin(c2_0, 0)
@@ -69,6 +68,7 @@ outlier = main_.outlier_detection(d0, d1)
 
 for i in range(5):
     d0, outlier = main_.iterative_region_voting(x0c, x1c, d0, outlier)
-    pred = d0.astype(np.float64) * 255 / disp_max
-    Image.fromarray(pred.astype(np.uint8)).save('foo%d.png' % i)
+
+pred = d0.astype(np.float64) * 255 / disp_max
+Image.fromarray(pred.astype(np.uint8)).save('foo.png')
 

@@ -1,4 +1,4 @@
-#cython: boundscheck=True
+#cython: boundscheck=False
 #cython: wraparound=False
 
 cdef extern from "math.h":
@@ -290,7 +290,7 @@ def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
 
     cdef np.ndarray[np.int_t, ndim=1] hist
     cdef np.ndarray[np.int_t, ndim=2] d0_res, outlier_res
-    cdef int i, j, ii, jj, ii_s, ii_t, jj_s, jj_t, d,
+    cdef int i, j, k, ii, jj, ii_s, ii_t, jj_s, jj_t, d, cnt
 
     hist = np.empty(disp_max, dtype=int)
     d0_res = np.empty_like(d0)
@@ -302,7 +302,9 @@ def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
             outlier_res[i,j] = outlier[i,j]
             if j - d < 0:
                 continue
-            hist.fill(0)
+            for k in range(disp_max):
+                hist[k] = 0
+            cnt = 0
             ii_s = max(x0c[i,j,0], x1c[i,j-d,0]) + 1
             ii_t = min(x0c[i,j,1], x1c[i,j-d,1])
             for ii in range(ii_s, ii_t):
@@ -311,8 +313,9 @@ def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
                 for jj in range(jj_s, jj_t):
                     if outlier[ii,jj] == 0:
                         hist[d0[ii,jj]] += 1
+                        cnt += 1
             d = hist.argmax()
-            if hist.sum() > tau_s and float(hist[d]) / hist.sum() > tau_h:
+            if cnt > tau_s and float(hist[d]) / cnt > tau_h:
                 outlier_res[i,j] = 0
                 d0_res[i,j] = d
     return d0_res, outlier_res
