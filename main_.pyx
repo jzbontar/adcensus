@@ -1,4 +1,4 @@
-#cython: boundscheck=False
+#cython: boundscheck=True
 #cython: wraparound=False
 
 cdef extern from "math.h":
@@ -387,7 +387,7 @@ def proper_interpolation(np.ndarray[np.float64_t, ndim=3] x0,
     return d0_res
 
 def depth_discontinuity_adjustment(np.ndarray[np.int_t, ndim=2] d0,
-                                   np.ndarray[np.float_t, ndim=3] vol):
+                                   np.ndarray[np.float64_t, ndim=3] vol):
     cdef np.ndarray[np.int_t, ndim=2] d0_res, d0s
     cdef int i, j, d
 
@@ -421,3 +421,24 @@ def depth_discontinuity_adjustment(np.ndarray[np.int_t, ndim=2] d0,
                 d0_res[i,j]= d
 
     return d0_res
+
+def subpixel_enchancement(np.ndarray[np.int_t, ndim=2] d0,
+                          np.ndarray[np.float64_t, ndim=3] vol):
+    cdef np.ndarray[np.float64_t, ndim=2] d0_res
+    cdef int i, j, d
+    cdef double cn, cz, cp, denom
+
+    d0_res = np.empty((height, width))
+    for i in range(height):
+        for j in range(width):
+            d = d0[i,j]
+            d0_res[i,j] = d
+            if 1 <= d < disp_max - 1:
+                cn = vol[d-1,i,j]
+                cz = vol[d,i,j]
+                cp = vol[d+1,i,j]
+                denom = 2 * (cp + cn - 2 * cz)
+                if denom > 1e-5:
+                    d0_res[i,j] = d - min(1, max(-1, (cp - cn) / denom))
+    return d0_res
+
