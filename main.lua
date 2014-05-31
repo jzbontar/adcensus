@@ -8,10 +8,15 @@ width = 384
 disp_max = 16
 ad_lambda = 10
 census_lambda = 30
+
 L1 = 34
 L2 = 17
 tau1 = 20
 tau2 = 6
+
+pi1 = 1
+pi2 = 3
+tau_so = 15
 
 cutorch.setDevice(1)
 
@@ -57,4 +62,9 @@ adcensus.cross(x1m, adcensus_vol, x1c, L1, L2, tau1, tau2)
 tmp = torch.CudaTensor(1, disp_max, height, width)
 adcensus.cbca(x0c, x1c, adcensus_vol, tmp)
 
-savePNG('bar.png', adcensus_vol)
+-- sgm
+tmp = torch.CudaTensor(4, disp_max, height, width):zero()
+adcensus.sgm(x0m, x1m, adcensus_vol, tmp, pi1, pi2, tau_so)
+sgm_out = tmp:sum(1)
+
+savePNG('bar.png', sgm_out)

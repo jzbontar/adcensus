@@ -20,6 +20,11 @@ void checkCudaError(lua_State *L) {
 	}
 }
 
+#define COLOR_DIFF(x, i, j) \
+	max(abs(x[(i)]               - x[(j)]), \
+    max(abs(x[(i) +   dim2*dim3] - x[(j) +   dim2*dim3]), \
+	    abs(x[(i) + 2*dim2*dim3] - x[(j) + 2*dim2*dim3])))
+
 __global__ void ad(float *x0, float *x1, float *output, int size, int size3, int size23)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -227,7 +232,6 @@ __global__ void cross(float *x0, float *vol, float *out, int size, int dim2, int
 		}
 
 		int xx, yy, ind1, ind2, ind3, dist;
-		int dim23 = dim2 * dim3;
 		ind1 = y * dim3 + x;
 		for (xx = x + dx, yy = y + dy;;xx += dx, yy += dy) {
 			if (xx < 0 || xx >= dim3 || yy < 0 || yy >= dim2) break;
@@ -235,26 +239,19 @@ __global__ void cross(float *x0, float *vol, float *out, int size, int dim2, int
 			dist = max(abs(xx - x), abs(yy - y));
 			if (dist == 1) continue;
 
-			/* rule 1 */
 			ind2 = yy * dim3 + xx;
 			ind3 = (yy - dy) * dim3 + (xx - dx);
 
-			if (abs(x0[0 * dim23 + ind1] - x0[0 * dim23 + ind2]) >= tau1) break;
-			if (abs(x0[1 * dim23 + ind1] - x0[1 * dim23 + ind2]) >= tau1) break;
-			if (abs(x0[2 * dim23 + ind1] - x0[2 * dim23 + ind2]) >= tau1) break;
-
-			if (abs(x0[0 * dim23 + ind2] - x0[0 * dim23 + ind3]) >= tau1) break;
-			if (abs(x0[1 * dim23 + ind2] - x0[1 * dim23 + ind3]) >= tau1) break;
-			if (abs(x0[2 * dim23 + ind2] - x0[2 * dim23 + ind3]) >= tau1) break;
+			/* rule 1 */
+			if (COLOR_DIFF(x0, ind1, ind2) >= tau1) break;
+			if (COLOR_DIFF(x0, ind2, ind3) >= tau1) break;
 
 			/* rule 2 */
 			if (dist >= L1) break;
 
 			/* rule 3 */
 			if (dist >= L2) {
-				if (abs(x0[0 * dim23 + ind1] - x0[0 * dim23 + ind2]) >= tau2) break;
-				if (abs(x0[1 * dim23 + ind1] - x0[1 * dim23 + ind2]) >= tau2) break;
-				if (abs(x0[2 * dim23 + ind1] - x0[2 * dim23 + ind2]) >= tau2) break;
+				if (COLOR_DIFF(x0, ind1, ind2) >= tau2) break;
 			}
 		}
 		out[id] = dir <= 1 ? xx : yy;
@@ -354,6 +351,106 @@ int cbca(lua_State *L)
 	return 0;
 }
 
+__global__ void sgm(float *x0, float *x1, float *vol, float *out, int dim1, int dim2, int dim3, float pi1, float pi2, float tau_so, int direction)
+{
+	int x, y, dx, dy;
+
+	dx = dy = 0;
+	if (direction <= 1) {
+		y = blockIdx.x * blockDim.x + threadIdx.x;
+		if (y >= dim2) {
+			return;
+		}
+		if (direction == 0) {
+			x = 0;
+			dx = 1;
+		} else if (direction == 1) {
+			x = dim3 - 1;
+			dx = -1;
+		}
+	} else {
+		x = blockIdx.x * blockDim.x + threadIdx.x;
+		if (x >= dim3) {
+			return;
+		}
+		if (direction == 2) {
+			y = 0;
+			dy = 1;
+		} else if (direction == 3) {
+			y = dim2 - 1;
+			dy = -1;
+		}
+	}
+
+	float min_prev = CUDART_INF;
+	for (; 0 <= y && y < dim2 && 0 <= x && x < dim3; x += dx, y += dy) {
+		float min_curr = CUDART_INF;
+		for (int d = 0; d < dim1; d++) {
+			int ind = (d * dim2 + y) * dim3 + x;
+			if (x - d < 0 || y - dy < 0 || y - dy >= dim2 || x - d - dx < 0 || x - dx >= dim3) {
+				out[ind] = vol[ind];
+			} else {
+				int ind2 = y * dim3 + x;
+
+				float D1 = COLOR_DIFF(x0, ind2, ind2 - dy * dim3 - dx);
+				float D2 = COLOR_DIFF(x1, ind2 - d, ind2 - d - dy * dim3 - dx);
+				float P1, P2;
+				if (D1 < tau_so && D2 < tau_so) { 
+					P1 = pi1; 
+					P2 = pi2; 
+				} else if (D1 > tau_so && D2 > tau_so) { 
+					P1 = pi1 / 10; 
+					P2 = pi2 / 10; 
+				} else {
+					P1 = pi1 / 4;
+					P2 = pi2 / 4;
+				}
+
+				assert(min_prev != CUDART_INF);
+				float cost = min(out[ind - dy * dim3 - dx], min_prev + P2);
+				if (d > 0) {
+					cost = min(cost, out[ind - dim2 * dim3 - dy * dim3 - dx] + P1);
+				}
+				if (d < dim1 - 1) {
+					cost = min(cost, out[ind + dim2 * dim3 - dy * dim3 - dx] + P1);
+				}
+				out[ind] = vol[ind] + cost - min_prev;
+			}
+			if (out[ind] < min_curr) {
+				min_curr = out[ind];
+			}
+		}
+		min_prev = min_curr;
+	}
+}
+
+int sgm(lua_State *L)
+{
+	THCudaTensor *x0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *x1 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *vol = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
+	float pi1 = luaL_checknumber(L, 5);
+	float pi2 = luaL_checknumber(L, 6);
+	float tau_so = luaL_checknumber(L, 7);
+
+	int dim1 = THCudaTensor_size(out, 1);
+	int dim2 = THCudaTensor_size(out, 2);
+	int dim3 = THCudaTensor_size(out, 3);
+
+	for (int i = 0; i < 4; i++) {
+		sgm<<<(THCudaTensor_size(vol, 2) - 1) / TB + 1, TB>>>(
+			THCudaTensor_data(x0),
+			THCudaTensor_data(x1),
+			THCudaTensor_data(vol),
+			THCudaTensor_data(out) + i * dim1 * dim2 * dim3,
+			dim1, dim2, dim3, pi1, pi2, tau_so, i);
+	}
+
+	checkCudaError(L);
+	return 0;
+}
+
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
 	{"cbca", cbca},
@@ -361,6 +458,7 @@ static const struct luaL_Reg funcs[] = {
 	{"cross", cross},
 	{"median3", median3},
 	{"spatial_argmin", spatial_argmin},
+	{"sgm", sgm},
 	{NULL, NULL}
 };
 
