@@ -368,7 +368,7 @@ __global__ void sgm(float *x0, float *x1, float *vol, float *out, int dim1, int 
 			x = dim3 - 1;
 			dx = -1;
 		}
-	} else {
+	} else if (direction <= 3) {
 		x = blockIdx.x * blockDim.x + threadIdx.x;
 		if (x >= dim3) {
 			return;
@@ -379,6 +379,52 @@ __global__ void sgm(float *x0, float *x1, float *vol, float *out, int dim1, int 
 		} else if (direction == 3) {
 			y = dim2 - 1;
 			dy = -1;
+		}
+	} else if (direction <= 7) {
+		int id = blockIdx.x * blockDim.x + threadIdx.x;
+		if (id >= dim2 + dim3 - 1) {
+			return;
+		}
+		if (direction == 4) {
+			if (id < dim2) {
+				x = 0;
+				y = id;
+			} else {
+				x = id - dim2 + 1;
+				y = 0;
+			}
+			dx = 1;
+			dy = 1;
+		} else if (direction == 5) {
+			if (id < dim2) {
+				x = dim3 - 1;
+				y = id;
+			} else {
+				x = id - dim2 + 1;
+				y = dim2 - 1;
+			}
+			dx = -1;
+			dy = -1;
+		} else if (direction == 6) {
+			if (id < dim2) {
+				x = 0;
+				y = id;
+			} else {
+				x = id - dim2 + 1;
+				y = dim2 - 1;
+			}
+			dx = 1;
+			dy = -1;
+		} else if (direction == 7) {
+			if (id < dim2) {
+				x = dim3 - 1;
+				y = id;
+			} else {
+				x = id - dim2 + 1;
+				y = 0;
+			}
+			dx = -1;
+			dy = 1;
 		}
 	}
 
@@ -438,16 +484,24 @@ int sgm(lua_State *L)
 	int dim2 = THCudaTensor_size(out, 2);
 	int dim3 = THCudaTensor_size(out, 3);
 
-
-	for (int i = 0; i < 4; i++) {
+	for (int direction = 0; direction < 8; direction++) {
 		cudaStream_t stream;
 		cudaStreamCreate(&stream);
-		sgm<<<(THCudaTensor_size(vol, 2) - 1) / TB + 1, TB, 0, stream>>>(
+		int size;
+		if (direction <= 1) {
+			size = dim2;
+		} else if (direction <= 3) {
+			size = dim3;
+		} else if (direction <= 7) {
+			size = dim2 + dim3 - 1;
+		}
+
+		sgm<<<(size - 1) / TB + 1, TB, 0, stream>>>(
 			THCudaTensor_data(x0),
 			THCudaTensor_data(x1),
 			THCudaTensor_data(vol),
-			THCudaTensor_data(out) + i * dim1 * dim2 * dim3,
-			dim1, dim2, dim3, pi1, pi2, tau_so, i);
+			THCudaTensor_data(out) + direction * dim1 * dim2 * dim3,
+			dim1, dim2, dim3, pi1, pi2, tau_so, direction);
 		cudaStreamDestroy(stream);
 	}
 

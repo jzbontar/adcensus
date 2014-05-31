@@ -63,7 +63,8 @@ tmp = torch.CudaTensor(1, disp_max, height, width)
 adcensus.cbca(x0c, x1c, adcensus_vol, tmp)
 
 -- sgm
-tmp = torch.CudaTensor(4, disp_max, height, width):zero()
+tmp = torch.CudaTensor(8, disp_max, height, width):zero()
 adcensus.sgm(x0m, x1m, adcensus_vol, tmp, pi1, pi2, tau_so)
---sgm_out = tmp:sum(1)
---savePNG('bar.png', sgm_out)
+sgm_out = tmp:sum(1)
+
+savePNG('bar.png', sgm_out)
