@@ -37,18 +37,17 @@ def match(x0, x1):
     census_vol_robust = rho(census_vol, 30)
     adcensus_vol = ad_vol_robust + census_vol_robust
 
-    pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
-    Image.fromarray(pred.astype(np.uint8)).save('foo.png')
-    sys.exit()
-
-
     # cbca
     x0c = main_.cross(x0m)
     x1c = main_.cross(x1m)
 
     for i in range(2):
-        adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 0)
         adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 1)
+        adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 0)
+
+    pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
+    Image.fromarray(pred.astype(np.uint8)).save('foo.png')
+    sys.exit()
 
     # semi-global matching
     c2_vol = main_.sgm(x0m, x1m, adcensus_vol)

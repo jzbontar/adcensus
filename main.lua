@@ -53,14 +53,12 @@ x1c = torch.CudaTensor(1, 4, height, width)
 adcensus.cross(x0m, adcensus_vol, x0c, L1, L2, tau1, tau2)
 adcensus.cross(x1m, adcensus_vol, x1c, L1, L2, tau1, tau2)
 
-math.randomseed(os.time())
-x, y = math.random(1,width), math.random(1,height)
-for i = x0c[{1,3,y,x}] + 1, x0c[{1,4,y,x}] - 1 do
-   for j = x0c[{1,1,i+1,x}] + 1, x0c[{1,2,i+1,x}] - 1 do
-      x0[{1,{},i+1,j+1}] = 255
-   end
-end
+-- cbca
+tmp = torch.CudaTensor(1, disp_max, height, width)
 
-image.savePNG('bar.png', x0[1]:div(255))
+adcensus.cbca(x0c, x1c, adcensus_vol, tmp, 0)
+adcensus.cbca(x0c, x1c, tmp, adcensus_vol, 1)
+adcensus.cbca(x0c, x1c, adcensus_vol, tmp, 0)
+adcensus.cbca(x0c, x1c, tmp, adcensus_vol, 1)
 
--- savePNG('bar.png', adcensus_vol)
+savePNG('bar.png', adcensus_vol)

@@ -286,11 +286,49 @@ int cross(lua_State *L)
 }
 
 
-__global__ void cbca(float *x0c, float *x1c, float *vol, float *out, int size)
+__global__ void cbca(float *x0c, float *x1c, float *vol, float *out, int size, int dim2, int dim3, int direction)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < size) {
-		
+		int d = id;
+		int x = d % dim3;
+		d /= dim3;
+		int y = d % dim2;
+		d /= dim2;
+
+		if (x - d < 0) {
+			out[id] = vol[id];
+		} else {
+			float sum = 0;
+			int cnt = 0;
+
+			if (direction == 0) {
+				int xx_s = max(x0c[(0 * dim2 + y) * dim3 + x], x1c[(0 * dim2 + y) * dim3 + x - d] + d);
+				int xx_t = min(x0c[(1 * dim2 + y) * dim3 + x], x1c[(1 * dim2 + y) * dim3 + x - d] + d);
+				for (int xx = xx_s + 1; xx < xx_t; xx++) {
+					int yy_s = max(x0c[(2 * dim2 + y) * dim3 + xx], x1c[(2 * dim2 + y) * dim3 + xx - d]);
+					int yy_t = min(x0c[(3 * dim2 + y) * dim3 + xx], x1c[(3 * dim2 + y) * dim3 + xx - d]);
+					for (int yy = yy_s + 1; yy < yy_t; yy++) {
+						sum += vol[(d * dim2 + yy) * dim3 + xx];
+						cnt++;
+					}
+				}
+			} else {
+				int yy_s = max(x0c[(2 * dim2 + y) * dim3 + x], x1c[(2 * dim2 + y) * dim3 + x - d]);
+				int yy_t = min(x0c[(3 * dim2 + y) * dim3 + x], x1c[(3 * dim2 + y) * dim3 + x - d]);
+				for (int yy = yy_s + 1; yy < yy_t; yy++) {
+					int xx_s = max(x0c[(0 * dim2 + yy) * dim3 + x], x1c[(0 * dim2 + yy) * dim3 + x - d] + d);
+					int xx_t = min(x0c[(1 * dim2 + yy) * dim3 + x], x1c[(1 * dim2 + yy) * dim3 + x - d] + d);
+					for (int xx = xx_s + 1; xx < xx_t; xx++) {
+						sum += vol[(d * dim2 + yy) * dim3 + xx];
+						cnt++;
+					}
+				}
+			}
+
+			assert(cnt > 0);
+			out[id] = sum / cnt;
+		}
 	}
 }
 
@@ -301,16 +339,28 @@ int cbca(lua_State *L)
 	THCudaTensor *x1c = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
 	THCudaTensor *vol = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
 	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
+	int direction = luaL_checkinteger(L, 5);
+	assert(direction == 0 || direction == 1);
 
-	checkCudaError(L)
+	cbca<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(x0c),
+		THCudaTensor_data(x1c),
+		THCudaTensor_data(vol),
+		THCudaTensor_data(out),
+		THCudaTensor_nElement(out),
+		THCudaTensor_size(out, 2),
+		THCudaTensor_size(out, 3),
+		direction);
+	checkCudaError(L);
 	return 0;
 }
 
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
-	{"median3", median3},
-	{"cross", cross},
+	{"cbca", cbca},
 	{"census", census},
+	{"cross", cross},
+	{"median3", median3},
 	{"spatial_argmin", spatial_argmin},
 	{NULL, NULL}
 };
