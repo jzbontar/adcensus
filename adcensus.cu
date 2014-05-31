@@ -25,6 +25,13 @@ void checkCudaError(lua_State *L) {
     max(abs(x[(i) +   dim2*dim3] - x[(j) +   dim2*dim3]), \
 	    abs(x[(i) + 2*dim2*dim3] - x[(j) + 2*dim2*dim3])))
 
+THCudaTensor *new_tensor_like(THCudaTensor *x)
+{
+	THCudaTensor *y = THCudaTensor_new();
+	THCudaTensor_resizeAs(y, x);
+	return y;
+}
+
 __global__ void ad(float *x0, float *x1, float *output, int size, int size3, int size23)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -52,15 +59,15 @@ int ad(lua_State *L)
 {
 	THCudaTensor *x0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
 	THCudaTensor *x1 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
-	THCudaTensor *output = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
 
-	ad<<<(THCudaTensor_nElement(output) - 1) / TB + 1, TB>>>(
+	ad<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
 		THCudaTensor_data(x0),
 		THCudaTensor_data(x1),
-		THCudaTensor_data(output),
-		THCudaTensor_nElement(output),
-		THCudaTensor_size(output, 3),
-		THCudaTensor_size(output, 2) * THCudaTensor_size(output, 3));
+		THCudaTensor_data(out),
+		THCudaTensor_nElement(out),
+		THCudaTensor_size(out, 3),
+		THCudaTensor_size(out, 2) * THCudaTensor_size(out, 3));
 	checkCudaError(L);
 	return 0;
 }
@@ -107,15 +114,16 @@ int census(lua_State *L)
 {
 	THCudaTensor *x0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
 	THCudaTensor *x1 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
-	THCudaTensor *output = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
 
-	census<<<(THCudaTensor_nElement(output) - 1) / TB + 1, TB>>>(
+
+	census<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
 		THCudaTensor_data(x0),
 		THCudaTensor_data(x1),
-		THCudaTensor_data(output),
-		THCudaTensor_nElement(output),
-		THCudaTensor_size(output, 2),
-		THCudaTensor_size(output, 3));
+		THCudaTensor_data(out),
+		THCudaTensor_nElement(out),
+		THCudaTensor_size(out, 2),
+		THCudaTensor_size(out, 3));
 	checkCudaError(L);
 	return 0;
 }
@@ -195,7 +203,7 @@ __global__ void median3(float *img, float *out, int size, int height, int width)
 int median3(lua_State *L)
 {
 	THCudaTensor *img = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
-	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *out = new_tensor_like(img);
 
 	median3<<<(THCudaTensor_nElement(img) - 1) / TB + 1, TB>>>(
 		THCudaTensor_data(img),
@@ -204,7 +212,8 @@ int median3(lua_State *L)
 		THCudaTensor_size(img, 2),
 		THCudaTensor_size(img, 3));
 	checkCudaError(L);
-	return 0;
+	luaT_pushudata(L, out, "torch.CudaTensor");
+	return 1;
 }
 
 __global__ void cross(float *x0, float *out, int size, int dim2, int dim3, int L1, int L2, float tau1, float tau2)
@@ -274,7 +283,6 @@ int cross(lua_State *L)
 		THCudaTensor_size(out, 2),
 		THCudaTensor_size(out, 3),
 		L1, L2, tau1, tau2);
-
 	checkCudaError(L);
 	return 0;
 }
@@ -332,7 +340,7 @@ int cbca(lua_State *L)
 	THCudaTensor *x0c = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
 	THCudaTensor *x1c = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
 	THCudaTensor *vol1 = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
-	THCudaTensor *vol2 = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
+	THCudaTensor *vol2 = new_tensor_like(vol1);
 
 	for (int i = 0; i < 4; i++) {
 		cbca<<<(THCudaTensor_nElement(vol2) - 1) / TB + 1, TB>>>(
@@ -518,7 +526,7 @@ __global__ void fliplr(float *in, float *out, int size, int dim3)
 int fliplr(lua_State *L)
 {
 	THCudaTensor *in = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
-	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *out = new_tensor_like(in);
 
 	fliplr<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
 		THCudaTensor_data(in),
@@ -526,7 +534,8 @@ int fliplr(lua_State *L)
 		THCudaTensor_nElement(out),
 		THCudaTensor_size(out, 3));
 	checkCudaError(L);
-	return 0;
+	luaT_pushudata(L, out, "torch.CudaTensor");
+	return 1;
 }
 
 static const struct luaL_Reg funcs[] = {

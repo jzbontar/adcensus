@@ -27,7 +27,7 @@ function savePNG(fname, vol)
    image.savePNG(fname, pred[{1,1}])
 end
 
-function match(x0m, x1m, x0c, x1c)
+function match(x0m, x1m)
    -- ad volume
    ad_vol = torch.CudaTensor(1, disp_max, height, width)
    adcensus.ad(x0m, x1m, ad_vol)
@@ -45,9 +45,14 @@ function match(x0m, x1m, x0c, x1c)
    adcensus_vol = torch.CudaTensor(1, disp_max, height, width)
    adcensus_vol:add(ad_vol, 1, census_vol)
 
+   -- cross computation
+   x0c = torch.CudaTensor(1, 4, height, width)
+   x1c = torch.CudaTensor(1, 4, height, width)
+   adcensus.cross(x0m, x0c, L1, L2, tau1, tau2)
+   adcensus.cross(x1m, x1c, L1, L2, tau1, tau2)
+
    -- cbca
-   tmp = torch.CudaTensor(1, disp_max, height, width)
-   adcensus.cbca(x0c, x1c, adcensus_vol, tmp)
+   adcensus.cbca(x0c, x1c, adcensus_vol)
 
    -- sgm
    tmp = torch.CudaTensor(8, disp_max, height, width):zero()
@@ -61,26 +66,11 @@ x0 = image.loadPNG('data/tsukuba0.png', 3, 'byte'):float():resize(1, 3, height, 
 x1 = image.loadPNG('data/tsukuba1.png', 3, 'byte'):float():resize(1, 3, height, width):cuda()
 
 -- median filter
-x0m = torch.CudaTensor(1, 3, height, width)
-x1m = torch.CudaTensor(1, 3, height, width)
-adcensus.median3(x0, x0m)
-adcensus.median3(x1, x1m)
+x0m = adcensus.median3(x0)
+x1m = adcensus.median3(x1)
 
--- cross computation
-x0c = torch.CudaTensor(1, 4, height, width)
-x1c = torch.CudaTensor(1, 4, height, width)
-adcensus.cross(x0m, x0c, L1, L2, tau1, tau2)
-adcensus.cross(x1m, x1c, L1, L2, tau1, tau2)
+c2_0 = match(x0m, x1m)
+c2_1 = adcensus.fliplr(match(adcensus.fliplr(x1m), adcensus.fliplr(x0m)))
 
--- fliplr
-x0mf = torch.CudaTensor(1, 3, height, width)
-x1mf = torch.CudaTensor(1, 3, height, width)
-x0cf = torch.CudaTensor(1, 4, height, width)
-x1cf = torch.CudaTensor(1, 4, height, width)
-
-adcensus.fliplr(x0m, x0mf)
-
--- c2_0 = match(x0m, x1m, x0c, x1c)
--- c2_1 = match(x0mf, x1mf, x0cf, x1cf)
-
-image.savePNG('bar.png', x0mf[1]:div(255))
+savePNG('foo.png', c2_0)
+savePNG('bar.png', c2_1)

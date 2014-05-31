@@ -48,10 +48,6 @@ def match(x0, x1):
     # semi-global matching
     c2_vol = main_.sgm(x0m, x1m, adcensus_vol)
 
-    pred = np.argmin(c2_vol, 0).astype(np.float64) * 255 / disp_max
-    Image.fromarray(pred.astype(np.uint8)).save('foo.png')
-    sys.exit()
-
     return c2_vol
 
 x0 = np.array(Image.open('data/tsukuba0.png'), dtype=np.float64)
@@ -59,14 +55,20 @@ x1 = np.array(Image.open('data/tsukuba1.png'), dtype=np.float64)
 x0m = median_filter(x0, size=(3, 3, 1), mode='constant')
 x1m = median_filter(x1, size=(3, 3, 1), mode='constant')
 
-Image.fromarray(x0m[:,::-1].astype(np.uint8)).save('foo.png')
-sys.exit()
-
 x0c = main_.cross(x0m)
 x1c = main_.cross(x1m)
 
 c2_0 = match(x0, x1)
 c2_1 = match(x1[:,::-1], x0[:,::-1])[:,:,::-1]
+
+pred = np.argmin(c2_0, 0).astype(np.float64) * 255 / disp_max
+Image.fromarray(pred.astype(np.uint8)).save('foo1.png')
+
+pred = np.argmin(c2_1, 0).astype(np.float64) * 255 / disp_max
+Image.fromarray(pred.astype(np.uint8)).save('bar1.png')
+
+sys.exit()
+
 
 d0 = np.argmin(c2_0, 0)
 d1 = np.argmin(c2_1, 0)
