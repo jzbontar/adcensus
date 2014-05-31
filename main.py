@@ -13,8 +13,8 @@ width = 384
 disp_max = 16
 
 def match(x0, x1):
-    x0m = median_filter(x0, size=(3, 3, 1))
-    x1m = median_filter(x1, size=(3, 3, 1))
+    x0m = median_filter(x0, size=(3, 3, 1), mode='constant')
+    x1m = median_filter(x1, size=(3, 3, 1), mode='constant')
 
     # ad
     ad_vol = np.ones((disp_max, height, width)) * np.inf
@@ -55,8 +55,8 @@ def match(x0, x1):
 
 x0 = np.array(Image.open('data/tsukuba0.png'), dtype=np.float64)
 x1 = np.array(Image.open('data/tsukuba1.png'), dtype=np.float64)
-x0m = median_filter(x0, size=(3, 3, 1))
-x1m = median_filter(x1, size=(3, 3, 1))
+x0m = median_filter(x0, size=(3, 3, 1), mode='constant')
+x1m = median_filter(x1, size=(3, 3, 1), mode='constant')
 x0c = main_.cross(x0m)
 x1c = main_.cross(x1m)
 
