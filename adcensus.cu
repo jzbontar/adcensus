@@ -207,7 +207,7 @@ int median3(lua_State *L)
 	return 0;
 }
 
-__global__ void cross(float *x0, float *vol, float *out, int size, int dim2, int dim3, int L1, int L2, float tau1, float tau2)
+__global__ void cross(float *x0, float *out, int size, int dim2, int dim3, int L1, int L2, float tau1, float tau2)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < size) {
@@ -261,16 +261,14 @@ __global__ void cross(float *x0, float *vol, float *out, int size, int dim2, int
 int cross(lua_State *L)
 {
 	THCudaTensor *x0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
-	THCudaTensor *vol = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
-	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
-	int L1 = luaL_checkinteger(L, 4);
-	int L2 = luaL_checkinteger(L, 5);
-	float tau1 = luaL_checknumber(L, 6);
-	float tau2 = luaL_checknumber(L, 7);
+	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	int L1 = luaL_checkinteger(L, 3);
+	int L2 = luaL_checkinteger(L, 4);
+	float tau1 = luaL_checknumber(L, 5);
+	float tau2 = luaL_checknumber(L, 6);
 
 	cross<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
 		THCudaTensor_data(x0),
-		THCudaTensor_data(vol),
 		THCudaTensor_data(out),
 		THCudaTensor_nElement(out),
 		THCudaTensor_size(out, 2),
@@ -484,7 +482,7 @@ int sgm(lua_State *L)
 	int dim2 = THCudaTensor_size(out, 2);
 	int dim3 = THCudaTensor_size(out, 3);
 
-	for (int direction = 0; direction < 8; direction++) {
+	for (int direction = 0; direction < 4; direction++) {
 		cudaStream_t stream;
 		cudaStreamCreate(&stream);
 		int size;
@@ -504,7 +502,29 @@ int sgm(lua_State *L)
 			dim1, dim2, dim3, pi1, pi2, tau_so, direction);
 		cudaStreamDestroy(stream);
 	}
+	checkCudaError(L);
+	return 0;
+}
 
+__global__ void fliplr(float *in, float *out, int size, int dim3)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		int x = id % dim3;
+		out[id + dim3 - 2 * x - 1] = in[id];
+	}
+}
+
+int fliplr(lua_State *L)
+{
+	THCudaTensor *in = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+
+	fliplr<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(in),
+		THCudaTensor_data(out),
+		THCudaTensor_nElement(out),
+		THCudaTensor_size(out, 3));
 	checkCudaError(L);
 	return 0;
 }
@@ -517,6 +537,7 @@ static const struct luaL_Reg funcs[] = {
 	{"median3", median3},
 	{"spatial_argmin", spatial_argmin},
 	{"sgm", sgm},
+	{"fliplr", fliplr},
 	{NULL, NULL}
 };
 
