@@ -45,12 +45,13 @@ def match(x0, x1):
         adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 1)
         adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 0)
 
-    pred = np.argmin(adcensus_vol, 0).astype(np.float64) * 255 / disp_max
+    # semi-global matching
+    c2_vol = main_.sgm(x0m, x1m, adcensus_vol)
+
+    pred = np.argmin(c2_vol, 0).astype(np.float64) * 255 / disp_max
     Image.fromarray(pred.astype(np.uint8)).save('foo.png')
     sys.exit()
 
-    # semi-global matching
-    c2_vol = main_.sgm(x0m, x1m, adcensus_vol)
     return c2_vol
 
 x0 = np.array(Image.open('data/tsukuba0.png'), dtype=np.float64)

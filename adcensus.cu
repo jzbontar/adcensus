@@ -336,20 +336,20 @@ int cbca(lua_State *L)
 {
 	THCudaTensor *x0c = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
 	THCudaTensor *x1c = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
-	THCudaTensor *vol = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
-	THCudaTensor *out = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
-	int direction = luaL_checkinteger(L, 5);
-	assert(direction == 0 || direction == 1);
+	THCudaTensor *vol1 = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	THCudaTensor *vol2 = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
 
-	cbca<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
-		THCudaTensor_data(x0c),
-		THCudaTensor_data(x1c),
-		THCudaTensor_data(vol),
-		THCudaTensor_data(out),
-		THCudaTensor_nElement(out),
-		THCudaTensor_size(out, 2),
-		THCudaTensor_size(out, 3),
-		direction);
+	for (int i = 0; i < 4; i++) {
+		cbca<<<(THCudaTensor_nElement(vol2) - 1) / TB + 1, TB>>>(
+			THCudaTensor_data(x0c),
+			THCudaTensor_data(x1c),
+			THCudaTensor_data(i % 2 == 0 ? vol1 : vol2),
+			THCudaTensor_data(i % 2 == 0 ? vol2 : vol1),
+			THCudaTensor_nElement(vol2),
+			THCudaTensor_size(vol2, 2),
+			THCudaTensor_size(vol2, 3),
+			i % 2);
+	}
 	checkCudaError(L);
 	return 0;
 }

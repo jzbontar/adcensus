@@ -55,10 +55,6 @@ adcensus.cross(x1m, adcensus_vol, x1c, L1, L2, tau1, tau2)
 
 -- cbca
 tmp = torch.CudaTensor(1, disp_max, height, width)
-
-adcensus.cbca(x0c, x1c, adcensus_vol, tmp, 0)
-adcensus.cbca(x0c, x1c, tmp, adcensus_vol, 1)
-adcensus.cbca(x0c, x1c, adcensus_vol, tmp, 0)
-adcensus.cbca(x0c, x1c, tmp, adcensus_vol, 1)
+adcensus.cbca(x0c, x1c, adcensus_vol, tmp)
 
 savePNG('bar.png', adcensus_vol)
