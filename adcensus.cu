@@ -9,7 +9,6 @@ extern "C" {
 
 #include <stdio.h>
 #include <assert.h>
-#include "cublas_v2.h"
 #include <math_constants.h>
 
 #define TB 128
