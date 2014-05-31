@@ -438,13 +438,17 @@ int sgm(lua_State *L)
 	int dim2 = THCudaTensor_size(out, 2);
 	int dim3 = THCudaTensor_size(out, 3);
 
+
 	for (int i = 0; i < 4; i++) {
-		sgm<<<(THCudaTensor_size(vol, 2) - 1) / TB + 1, TB>>>(
+		cudaStream_t stream;
+		cudaStreamCreate(&stream);
+		sgm<<<(THCudaTensor_size(vol, 2) - 1) / TB + 1, TB, 0, stream>>>(
 			THCudaTensor_data(x0),
 			THCudaTensor_data(x1),
 			THCudaTensor_data(vol),
 			THCudaTensor_data(out) + i * dim1 * dim2 * dim3,
 			dim1, dim2, dim3, pi1, pi2, tau_so, i);
+		cudaStreamDestroy(stream);
 	}
 
 	checkCudaError(L);
