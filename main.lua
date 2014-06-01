@@ -87,6 +87,9 @@ adcensus.outlier_detection(d0, d1, outlier)
 adcensus.iterative_region_voting(d0, x0c, x1c, outlier, tau_s, tau_h)
 d0 = adcensus.proper_interpolation(x0m, d0, outlier)
 
-savePNG('bar.png', d0)
-os.exit()
+g1, g2 = adcensus.sobel(d0)
+
+image.savePNG('bar.png', g2[{1,1}]:add(36):div(72))
+
+-- savePNG('bar.png', d0)
 

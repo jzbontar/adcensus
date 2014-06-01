@@ -760,6 +760,43 @@ int proper_interpolation(lua_State *L)
 	return 1;
 }
 
+__global__ void sobel(float *x, float *g1, float *g2, int size, int dim2, int dim3)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		int xx = id % dim3;
+		int yy = id / dim3;
+
+		if (1 <= yy && yy < dim2 - 1 && 1 <= xx && xx < dim3 - 1) {
+			g1[id] = -x[id-dim3-1] +x[id-dim3+1] -2*x[id-1] +2*x[id+1] -x[id+dim3-1] +x[id+dim3+1];
+			g2[id] = x[id-dim3-1] +2*x[id-dim3] +x[id-dim3+1] -x[id+dim3-1] -2*x[id+dim3] -x[id+dim3+1];
+		} else {
+			g1[id] = 0;
+			g2[id] = 0;
+		}
+	}
+}
+
+int sobel(lua_State *L) {
+	THCudaTensor *x = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *g1 = new_tensor_like(x);
+	THCudaTensor *g2 = new_tensor_like(x);
+
+	sobel<<<(THCudaTensor_nElement(x) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(x),
+		THCudaTensor_data(g1),
+		THCudaTensor_data(g2),
+		THCudaTensor_nElement(x),
+		THCudaTensor_size(x, 2),
+		THCudaTensor_size(x, 3)
+	);
+
+	checkCudaError(L);
+	luaT_pushudata(L, g1, "torch.CudaTensor");
+	luaT_pushudata(L, g2, "torch.CudaTensor");
+	return 2;
+}
+
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
 	{"cbca", cbca},
@@ -772,6 +809,7 @@ static const struct luaL_Reg funcs[] = {
 	{"outlier_detection", outlier_detection},
 	{"iterative_region_voting", iterative_region_voting},
 	{"proper_interpolation", proper_interpolation},
+	{"sobel", sobel},
 	{NULL, NULL}
 };
 
