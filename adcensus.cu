@@ -797,6 +797,47 @@ int sobel(lua_State *L) {
 	return 2;
 }
 
+__global__ void depth_discontinuity_adjustment(float *d0, float *c2, float *g1, float *g2, float *out, int size, int dim23, int dim3, float tau_e)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		float d = d0[id];
+		if (g1[id] > tau_e) {
+			if (c2[(int)d0[id - 1] * dim23 + id] < c2[(int)d0[id] * dim23 + id]) d = d0[id - 1];
+			if (c2[(int)d0[id + 1] * dim23 + id] < c2[(int)d0[id] * dim23 + id]) d = d0[id + 1];
+		} else if (g2[id] > tau_e) {
+			if (c2[(int)d0[id - dim3] * dim23 + id] < c2[(int)d0[id] * dim23 + id]) d = d0[id - dim3];
+			if (c2[(int)d0[id + dim3] * dim23 + id] < c2[(int)d0[id] * dim23 + id]) d = d0[id + dim3];
+		}
+		out[id] = d;
+	}
+}
+
+int depth_discontinuity_adjustment(lua_State *L) {
+	THCudaTensor *d0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *c2 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *g1 = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	THCudaTensor *g2 = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
+	float tau_e = luaL_checknumber(L, 5);
+	assert(tau_e > 0);
+
+	THCudaTensor *out = new_tensor_like(d0);
+
+	depth_discontinuity_adjustment<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(d0),
+		THCudaTensor_data(c2),
+		THCudaTensor_data(g1),
+		THCudaTensor_data(g2),
+		THCudaTensor_data(out),
+		THCudaTensor_nElement(out),
+		THCudaTensor_size(out, 2) * THCudaTensor_size(out, 3),
+		THCudaTensor_size(out, 3),
+		tau_e);
+	checkCudaError(L);
+	luaT_pushudata(L, out, "torch.CudaTensor");
+	return 1;
+}
+
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
 	{"cbca", cbca},
@@ -810,6 +851,7 @@ static const struct luaL_Reg funcs[] = {
 	{"iterative_region_voting", iterative_region_voting},
 	{"proper_interpolation", proper_interpolation},
 	{"sobel", sobel},
+	{"depth_discontinuity_adjustment", depth_discontinuity_adjustment},
 	{NULL, NULL}
 };
 

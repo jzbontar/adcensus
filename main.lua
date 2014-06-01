@@ -21,6 +21,8 @@ tau_so = 15
 tau_s = 20
 tau_h = 0.4
 
+tau_e = 10
+
 cutorch.setDevice(1)
 
 function savePNG(fname, pred)
@@ -88,8 +90,5 @@ adcensus.iterative_region_voting(d0, x0c, x1c, outlier, tau_s, tau_h)
 d0 = adcensus.proper_interpolation(x0m, d0, outlier)
 
 g1, g2 = adcensus.sobel(d0)
-
-image.savePNG('bar.png', g2[{1,1}]:add(36):div(72))
-
--- savePNG('bar.png', d0)
-
+d0 = adcensus.depth_discontinuity_adjustment(d0, c2_0, g1, g2, tau_e)
+savePNG('bar.png', d0)
