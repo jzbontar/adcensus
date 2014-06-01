@@ -303,7 +303,7 @@ def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
             d = d0[i,j]
             d0_res[i,j] = d
             outlier_res[i,j] = outlier[i,j]
-            if outlier[i,j] == 0 or j - d < 0:
+            if j - d < 0:
                 continue
             for k in range(disp_max):
                 hist[k] = 0
@@ -318,7 +318,7 @@ def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
                         hist[d0[ii,jj]] += 1
                         cnt += 1
             d = hist.argmax()
-            if cnt > tau_s and float(hist[d]) / cnt > tau_h:
+            if outlier[i,j] == 0 or (cnt > tau_s and float(hist[d]) / cnt > tau_h):
                 outlier_res[i,j] = 0
                 d0_res[i,j] = d
     return d0_res, outlier_res

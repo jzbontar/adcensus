@@ -353,7 +353,8 @@ int cbca(lua_State *L)
 			THCudaTensor_nElement(vol2),
 			THCudaTensor_size(vol2, 2),
 			THCudaTensor_size(vol2, 3),
-			i % 2);
+			(i + 1) % 2);
+		// TODO change: i + 1 -> 1
 	}
 	checkCudaError(L);
 	return 0;
@@ -588,7 +589,7 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 		d0_out[id] = d;
 		outlier_out[id] = outlier[id];
 
-		if (outlier[id] == 0 || x - d < 0) return;
+		if (x - d < 0) return;
 
 		int hist[DISP_MAX];
 		for (int i = 0; i < DISP_MAX; i++) {
@@ -631,7 +632,7 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 			}
 		}
 
-		if (cnt > tau_s && (float)hist[max_i] / cnt > tau_h) {
+		if (outlier[id] == 0 || (cnt > tau_s && (float)hist[max_i] / cnt > tau_h)) {
 			outlier_out[id] = 0;
 			d0_out[id] = max_i;
 		}
@@ -650,7 +651,7 @@ int iterative_region_voting(lua_State *L)
 	THCudaTensor *d0_tmp = new_tensor_like(d0);
 	THCudaTensor *outlier_tmp = new_tensor_like(outlier);
 
-	for (int i = 0; i < 6; i++) {
+	for (int i = 0; i < 4; i++) {
 		iterative_region_voting<<<(THCudaTensor_nElement(d0) - 1) / TB + 1, TB>>>(
 			THCudaTensor_data(i % 2 == 0 ? d0 : d0_tmp),
 			THCudaTensor_data(x0c),

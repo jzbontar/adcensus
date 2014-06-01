@@ -84,6 +84,7 @@ d1:add(-1)
 
 outlier = torch.CudaTensor(1, 1, height, width)
 adcensus.outlier_detection(d0, d1, outlier)
-
 adcensus.iterative_region_voting(d0, x0c, x1c, outlier, tau_s, tau_h)
+
 savePNG('bar.png', d0)
+os.exit()
