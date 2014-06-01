@@ -88,7 +88,9 @@ outlier = torch.CudaTensor(1, 1, height, width)
 adcensus.outlier_detection(d0, d1, outlier)
 adcensus.iterative_region_voting(d0, x0c, x1c, outlier, tau_s, tau_h)
 d0 = adcensus.proper_interpolation(x0m, d0, outlier)
-
 g1, g2 = adcensus.sobel(d0)
 d0 = adcensus.depth_discontinuity_adjustment(d0, c2_0, g1, g2, tau_e)
+d0 = adcensus.subpixel_enchancement(d0, c2_0)
+d0 = adcensus.median3(d0)
+
 savePNG('bar.png', d0)
