@@ -589,6 +589,7 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 		d0_out[id] = d;
 		outlier_out[id] = outlier[id];
 
+		/* the if should include `outlier[id] == 0 ||`, but it works better without it */
 		if (x - d < 0) return;
 
 		int hist[DISP_MAX];
@@ -670,6 +671,95 @@ int iterative_region_voting(lua_State *L)
 	return 0;
 }
 
+__global__ void proper_interpolation(float *x0, float *d0, float *outlier, float *out, int size, int dim2, int dim3)
+{
+	const float dir[] = {
+		0   ,  1,
+		-0.5,  1,
+		-1  ,  1,
+		-1  ,  0.5,
+		-1  ,  0,
+		-1  , -0.5,
+		-1  , -1,
+		-0.5, -1,
+		0   , -1,
+
+		0.5 , -1,
+		1   , -1,
+		1   , -0.5,
+		1   ,  0,
+		1   ,  0.5,
+		1   ,  1,
+		0.5 ,  1
+	};
+
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		if (outlier[id] == 0) {
+			out[id] = d0[id];
+			return;
+		}
+
+		int x = id % dim3;
+		int y = id / dim3;
+		float min_d = CUDART_INF;
+		float min_diff = CUDART_INF;
+		for (int d = 0; d < (outlier[id] == 1 ? 9 : 16); d++) {
+			float dx = dir[2 * d];
+			float dy = dir[2 * d + 1];
+			float xx = x;
+			float yy = y;
+			int xx_i = round(xx);
+			int yy_i = round(yy);
+			while (0 <= yy_i && yy_i < dim2 && 0 <= xx_i && xx_i < dim3 && outlier[yy_i * dim3 + xx_i] != 0) {
+				xx += dx;
+				yy += dy;
+				xx_i = round(xx);
+				yy_i = round(yy);
+			}
+
+			int ind = yy_i * dim3 + xx_i;
+			if (outlier[ind] == 0) {
+				if (outlier[id] == 1) {
+					if (d0[ind] < min_d) {
+						min_d = d0[ind];
+					}
+				} else if (outlier[id] == 2) {
+					float diff = COLOR_DIFF(x0, id, ind);
+					if (diff < min_diff) {
+						min_diff = diff;
+						min_d = d0[ind];
+					}
+				}
+			}
+		}
+		assert(min_d != CUDART_INF);
+		out[id] = min_d;
+	}
+}
+
+int proper_interpolation(lua_State *L)
+{
+	THCudaTensor *x0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *d0 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *outlier = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	THCudaTensor *out = new_tensor_like(d0);
+
+	proper_interpolation<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(x0),
+		THCudaTensor_data(d0),
+		THCudaTensor_data(outlier),
+		THCudaTensor_data(out),
+		THCudaTensor_nElement(out),
+		THCudaTensor_size(out, 2),
+		THCudaTensor_size(out, 3)
+	);
+
+	checkCudaError(L);
+	luaT_pushudata(L, out, "torch.CudaTensor");
+	return 1;
+}
+
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
 	{"cbca", cbca},
@@ -681,6 +771,7 @@ static const struct luaL_Reg funcs[] = {
 	{"fliplr", fliplr},
 	{"outlier_detection", outlier_detection},
 	{"iterative_region_voting", iterative_region_voting},
+	{"proper_interpolation", proper_interpolation},
 	{NULL, NULL}
 };
 
