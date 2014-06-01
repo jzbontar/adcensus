@@ -287,7 +287,6 @@ int cross(lua_State *L)
 	return 0;
 }
 
-
 __global__ void cbca(float *x0c, float *x1c, float *vol, float *out, int size, int dim2, int dim3, int direction)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -538,6 +537,41 @@ int fliplr(lua_State *L)
 	return 1;
 }
 
+__global__ void outlier_detection(float *d0, float *d1, float *outlier, int size, int disp_max)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		if (abs(d0[id] - d1[id - (int)d0[id]]) <= 0.1) {
+			outlier[id] = 0; /* match */
+		} else {
+			outlier[id] = 1; /* occlusion */
+			for (int d = 0; d < disp_max; d++) {
+				if (abs(d - d1[id - d]) <= 0.1) {
+					outlier[id] = 2; /* mismatch */
+					break;
+				}
+			}
+		}
+	}
+}
+
+int outlier_detection(lua_State *L)
+{
+	THCudaTensor *d0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *d1 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *outlier = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	int disp_max = luaL_checkinteger(L, 4);
+
+	outlier_detection<<<(THCudaTensor_nElement(d0) - 1) / TB + 1, TB>>>(
+		THCudaTensor_data(d0),
+		THCudaTensor_data(d1),
+		THCudaTensor_data(outlier),
+		THCudaTensor_nElement(d0),
+		disp_max);
+	checkCudaError(L);
+	return 0;
+}
+
 static const struct luaL_Reg funcs[] = {
 	{"ad", ad},
 	{"cbca", cbca},
@@ -547,6 +581,7 @@ static const struct luaL_Reg funcs[] = {
 	{"spatial_argmin", spatial_argmin},
 	{"sgm", sgm},
 	{"fliplr", fliplr},
+	{"outlier_detection", outlier_detection},
 	{NULL, NULL}
 };
 

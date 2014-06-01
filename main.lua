@@ -20,9 +20,9 @@ tau_so = 15
 
 cutorch.setDevice(1)
 
-function savePNG(fname, vol)
-   local pred = torch.CudaTensor(1, 1, height, width)
-   adcensus.spatial_argmin(vol, pred)
+function savePNG(fname, pred)
+   --local pred = torch.CudaTensor(1, 1, height, width)
+   --adcensus.spatial_argmin(vol, pred)
    pred:add(-1):div(disp_max)
    image.savePNG(fname, pred[{1,1}])
 end
@@ -72,5 +72,26 @@ x1m = adcensus.median3(x1)
 c2_0 = match(x0m, x1m)
 c2_1 = adcensus.fliplr(match(adcensus.fliplr(x1m), adcensus.fliplr(x0m)))
 
-savePNG('foo.png', c2_0)
-savePNG('bar.png', c2_1)
+d0 = torch.CudaTensor(1, 1, height, width)
+d1 = torch.CudaTensor(1, 1, height, width)
+adcensus.spatial_argmin(c2_0, d0)
+adcensus.spatial_argmin(c2_1, d1)
+
+outlier = torch.CudaTensor(1, 1, height, width)
+adcensus.outlier_detection(d0, d1, outlier, disp_max)
+
+for i=1,height do
+   for j=1,width do
+      if outlier[{1,1,i,j}] == 1 then
+         x0m[{1,{},i,j}] = 0
+         x0m[{1,2,i,j}] = 255
+      end
+
+      if outlier[{1,1,i,j}] == 2 then
+         x0m[{1,{},i,j}] = 0
+         x0m[{1,1,i,j}] = 255
+      end
+   end
+end
+
+image.savePNG('bar.png', x0m[1]:div(255))
