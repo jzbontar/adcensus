@@ -595,8 +595,19 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 		}
 
 		assert(0 <= direction && direction < 2);
-		int cnt = 0;
 		if (direction == 0) {
+			int xx_s = max(x0c[(0 * dim2 + y) * dim3 + x], x1c[(0 * dim2 + y) * dim3 + x - d] + d);
+			int xx_t = min(x0c[(1 * dim2 + y) * dim3 + x], x1c[(1 * dim2 + y) * dim3 + x - d] + d);
+			for (int xx = xx_s + 1; xx < xx_t; xx++) {
+				int yy_s = max(x0c[(2 * dim2 + y) * dim3 + xx], x1c[(2 * dim2 + y) * dim3 + xx - d]);
+				int yy_t = min(x0c[(3 * dim2 + y) * dim3 + xx], x1c[(3 * dim2 + y) * dim3 + xx - d]);
+				for (int yy = yy_s + 1; yy < yy_t; yy++) {
+					if (outlier[yy * dim3 + xx] == 0) {
+						hist[(int)d0[yy * dim3 + xx]]++;
+					}
+				}
+			}
+		} else {
 			int yy_s = max(x0c[(2 * dim2 + y) * dim3 + x], x1c[(2 * dim2 + y) * dim3 + x - d]);
 			int yy_t = min(x0c[(3 * dim2 + y) * dim3 + x], x1c[(3 * dim2 + y) * dim3 + x - d]);
 			for (int yy = yy_s + 1; yy < yy_t; yy++) {
@@ -605,14 +616,15 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 				for (int xx = xx_s + 1; xx < xx_t; xx++) {
 					if (outlier[yy * dim3 + xx] == 0) {
 						hist[(int)d0[yy * dim3 + xx]]++;
-						cnt++;
 					}
 				}
 			}
 		}
 
+		int cnt = 0;
 		int max_i = 0;
-		for (int i = 1; i < DISP_MAX; i++) {
+		for (int i = 0; i < DISP_MAX; i++) {
+			cnt += hist[i];
 			if (hist[i] > hist[max_i]) {
 				max_i = i;
 			}
@@ -648,7 +660,7 @@ int iterative_region_voting(lua_State *L)
 			THCudaTensor_nElement(d0),
 			THCudaTensor_size(d0, 2),
 			THCudaTensor_size(d0, 3),
-			tau_s, tau_h, 0);
+			tau_s, tau_h, i % 2);
 	}
 	checkCudaError(L);
 	return 0;
