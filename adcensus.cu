@@ -13,6 +13,8 @@ extern "C" {
 
 #define TB 128
 
+#define DISP_MAX 16
+
 void checkCudaError(lua_State *L) {
 	cudaError_t status = cudaPeekAtLastError();
 	if (status != cudaSuccess) {
@@ -303,6 +305,7 @@ __global__ void cbca(float *x0c, float *x1c, float *vol, float *out, int size, i
 			float sum = 0;
 			int cnt = 0;
 
+			assert(0 <= direction && direction < 2);
 			if (direction == 0) {
 				int xx_s = max(x0c[(0 * dim2 + y) * dim3 + x], x1c[(0 * dim2 + y) * dim3 + x - d] + d);
 				int xx_t = min(x0c[(1 * dim2 + y) * dim3 + x], x1c[(1 * dim2 + y) * dim3 + x - d] + d);
@@ -361,6 +364,7 @@ __global__ void sgm(float *x0, float *x1, float *vol, float *out, int dim1, int 
 	int x, y, dx, dy;
 
 	dx = dy = 0;
+	assert(0 <= direction && direction < 8);
 	if (direction <= 1) {
 		y = blockIdx.x * blockDim.x + threadIdx.x;
 		if (y >= dim2) {
@@ -537,16 +541,17 @@ int fliplr(lua_State *L)
 	return 1;
 }
 
-__global__ void outlier_detection(float *d0, float *d1, float *outlier, int size, int disp_max)
+__global__ void outlier_detection(float *d0, float *d1, float *outlier, int size, int dim3)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < size) {
-		if (abs(d0[id] - d1[id - (int)d0[id]]) <= 0.1) {
+		int x = id % dim3;
+		if (id - (int)d0[id] < 0 || abs(d0[id] - d1[id - (int)d0[id]]) < 0.1) {
 			outlier[id] = 0; /* match */
 		} else {
 			outlier[id] = 1; /* occlusion */
-			for (int d = 0; d < disp_max; d++) {
-				if (abs(d - d1[id - d]) <= 0.1) {
+			for (int d = 0; d < DISP_MAX; d++) {
+				if (x - d >= 0 && abs(d - d1[id - d]) < 0.1) {
 					outlier[id] = 2; /* mismatch */
 					break;
 				}
@@ -560,14 +565,91 @@ int outlier_detection(lua_State *L)
 	THCudaTensor *d0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
 	THCudaTensor *d1 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
 	THCudaTensor *outlier = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
-	int disp_max = luaL_checkinteger(L, 4);
 
 	outlier_detection<<<(THCudaTensor_nElement(d0) - 1) / TB + 1, TB>>>(
 		THCudaTensor_data(d0),
 		THCudaTensor_data(d1),
 		THCudaTensor_data(outlier),
 		THCudaTensor_nElement(d0),
-		disp_max);
+		THCudaTensor_size(d0, 3));
+	checkCudaError(L);
+	return 0;
+}
+
+__global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float *outlier, float *d0_out, float *outlier_out, int size, int dim2, int dim3, float tau_s, float tau_h, int direction)
+{
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < size) {
+		int x = id % dim3;
+		int y = id / dim3;
+		int d = d0[id];
+		
+		d0_out[id] = d;
+		outlier_out[id] = outlier[id];
+
+		if (outlier[id] == 0 || x - d < 0) return;
+
+		int hist[DISP_MAX];
+		for (int i = 0; i < DISP_MAX; i++) {
+			hist[i] = 0;
+		}
+
+		assert(0 <= direction && direction < 2);
+		int cnt = 0;
+		if (direction == 0) {
+			int yy_s = max(x0c[(2 * dim2 + y) * dim3 + x], x1c[(2 * dim2 + y) * dim3 + x - d]);
+			int yy_t = min(x0c[(3 * dim2 + y) * dim3 + x], x1c[(3 * dim2 + y) * dim3 + x - d]);
+			for (int yy = yy_s + 1; yy < yy_t; yy++) {
+				int xx_s = max(x0c[(0 * dim2 + yy) * dim3 + x], x1c[(0 * dim2 + yy) * dim3 + x - d] + d);
+				int xx_t = min(x0c[(1 * dim2 + yy) * dim3 + x], x1c[(1 * dim2 + yy) * dim3 + x - d] + d);
+				for (int xx = xx_s + 1; xx < xx_t; xx++) {
+					if (outlier[yy * dim3 + xx] == 0) {
+						hist[(int)d0[yy * dim3 + xx]]++;
+						cnt++;
+					}
+				}
+			}
+		}
+
+		int max_i = 0;
+		for (int i = 1; i < DISP_MAX; i++) {
+			if (hist[i] > hist[max_i]) {
+				max_i = i;
+			}
+		}
+
+		if (cnt > tau_s && (float)hist[max_i] / cnt > tau_h) {
+			outlier_out[id] = 0;
+			d0_out[id] = max_i;
+		}
+	}
+}
+
+int iterative_region_voting(lua_State *L)
+{
+	THCudaTensor *d0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
+	THCudaTensor *x0c = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *x1c = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	THCudaTensor *outlier = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
+	float tau_s = luaL_checknumber(L, 5);
+	float tau_h = luaL_checknumber(L, 6);
+
+	THCudaTensor *d0_tmp = new_tensor_like(d0);
+	THCudaTensor *outlier_tmp = new_tensor_like(outlier);
+
+	for (int i = 0; i < 6; i++) {
+		iterative_region_voting<<<(THCudaTensor_nElement(d0) - 1) / TB + 1, TB>>>(
+			THCudaTensor_data(i % 2 == 0 ? d0 : d0_tmp),
+			THCudaTensor_data(x0c),
+			THCudaTensor_data(x1c),
+			THCudaTensor_data(i % 2 == 0 ? outlier : outlier_tmp),
+			THCudaTensor_data(i % 2 == 0 ? d0_tmp : d0),
+			THCudaTensor_data(i % 2 == 0 ? outlier_tmp : outlier),
+			THCudaTensor_nElement(d0),
+			THCudaTensor_size(d0, 2),
+			THCudaTensor_size(d0, 3),
+			tau_s, tau_h, 0);
+	}
 	checkCudaError(L);
 	return 0;
 }
@@ -582,6 +664,7 @@ static const struct luaL_Reg funcs[] = {
 	{"sgm", sgm},
 	{"fliplr", fliplr},
 	{"outlier_detection", outlier_detection},
+	{"iterative_region_voting", iterative_region_voting},
 	{NULL, NULL}
 };
 

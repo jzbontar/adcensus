@@ -61,21 +61,18 @@ x1c = main_.cross(x1m)
 c2_0 = match(x0, x1)
 c2_1 = match(x1[:,::-1], x0[:,::-1])[:,:,::-1]
 
-pred = np.argmin(c2_0, 0).astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('foo1.png')
-
-pred = np.argmin(c2_1, 0).astype(np.float64) * 255 / disp_max
-Image.fromarray(pred.astype(np.uint8)).save('bar1.png')
-
-sys.exit()
-
 
 d0 = np.argmin(c2_0, 0)
 d1 = np.argmin(c2_1, 0)
 
 outlier = main_.outlier_detection(d0, d1)
-for i in range(5):
+for i in range(6):
     d0, outlier = main_.iterative_region_voting(x0c, x1c, d0, outlier)
+
+pred = d0.astype(np.float64) * 255 / disp_max
+Image.fromarray(pred.astype(np.uint8)).save('foo.png')
+sys.exit()
+
 d0 = main_.proper_interpolation(x0m, d0, outlier)
 d0 = main_.depth_discontinuity_adjustment(d0, c2_0)
 d0 = main_.subpixel_enchancement(d0, c2_0)

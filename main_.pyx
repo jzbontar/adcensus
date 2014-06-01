@@ -303,7 +303,7 @@ def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
             d = d0[i,j]
             d0_res[i,j] = d
             outlier_res[i,j] = outlier[i,j]
-            if j - d < 0:
+            if outlier[i,j] == 0 or j - d < 0:
                 continue
             for k in range(disp_max):
                 hist[k] = 0
