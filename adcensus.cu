@@ -493,6 +493,7 @@ int sgm(lua_State *L)
 	int dim2 = THCudaTensor_size(out, 2);
 	int dim3 = THCudaTensor_size(out, 3);
 
+	// TODO change: direction < 4 -> direction < 8
 	for (int direction = 0; direction < 4; direction++) {
 		cudaStream_t stream;
 		cudaStreamCreate(&stream);
@@ -660,7 +661,9 @@ int iterative_region_voting(lua_State *L)
 			THCudaTensor_nElement(d0),
 			THCudaTensor_size(d0, 2),
 			THCudaTensor_size(d0, 3),
-			tau_s, tau_h, i % 2);
+			tau_s, tau_h, 1);
+		// TODO change: 1 -> i % 2
+
 	}
 	checkCudaError(L);
 	return 0;
