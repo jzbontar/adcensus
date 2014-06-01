@@ -13,7 +13,7 @@ extern "C" {
 
 #define TB 128
 
-#define DISP_MAX 16
+#define DISP_MAX 256
 
 void checkCudaError(lua_State *L) {
 	cudaError_t status = cudaPeekAtLastError();
@@ -543,7 +543,7 @@ int fliplr(lua_State *L)
 	return 1;
 }
 
-__global__ void outlier_detection(float *d0, float *d1, float *outlier, int size, int dim3)
+__global__ void outlier_detection(float *d0, float *d1, float *outlier, int size, int dim3, int disp_max)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < size) {
@@ -552,7 +552,7 @@ __global__ void outlier_detection(float *d0, float *d1, float *outlier, int size
 			outlier[id] = 0; /* match */
 		} else {
 			outlier[id] = 1; /* occlusion */
-			for (int d = 0; d < DISP_MAX; d++) {
+			for (int d = 0; d < disp_max; d++) {
 				if (x - d >= 0 && abs(d - d1[id - d]) < 0.1) {
 					outlier[id] = 2; /* mismatch */
 					break;
@@ -567,18 +567,20 @@ int outlier_detection(lua_State *L)
 	THCudaTensor *d0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
 	THCudaTensor *d1 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
 	THCudaTensor *outlier = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
+	int disp_max = luaL_checkinteger(L, 4);
 
 	outlier_detection<<<(THCudaTensor_nElement(d0) - 1) / TB + 1, TB>>>(
 		THCudaTensor_data(d0),
 		THCudaTensor_data(d1),
 		THCudaTensor_data(outlier),
 		THCudaTensor_nElement(d0),
-		THCudaTensor_size(d0, 3));
+		THCudaTensor_size(d0, 3),
+		disp_max);
 	checkCudaError(L);
 	return 0;
 }
 
-__global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float *outlier, float *d0_out, float *outlier_out, int size, int dim2, int dim3, float tau_s, float tau_h, int direction)
+__global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float *outlier, float *d0_out, float *outlier_out, int size, int dim2, int dim3, float tau_s, float tau_h, int disp_max, int direction)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < size) {
@@ -592,8 +594,9 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 		/* the if should include `outlier[id] == 0 ||`, but it works better without it */
 		if (x - d < 0) return;
 
+		assert(disp_max < DISP_MAX);
 		int hist[DISP_MAX];
-		for (int i = 0; i < DISP_MAX; i++) {
+		for (int i = 0; i < disp_max; i++) {
 			hist[i] = 0;
 		}
 
@@ -626,7 +629,7 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 
 		int cnt = 0;
 		int max_i = 0;
-		for (int i = 0; i < DISP_MAX; i++) {
+		for (int i = 0; i < disp_max; i++) {
 			cnt += hist[i];
 			if (hist[i] > hist[max_i]) {
 				max_i = i;
@@ -648,6 +651,7 @@ int iterative_region_voting(lua_State *L)
 	THCudaTensor *outlier = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
 	float tau_s = luaL_checknumber(L, 5);
 	float tau_h = luaL_checknumber(L, 6);
+	int disp_max = luaL_checkinteger(L, 7);
 
 	THCudaTensor *d0_tmp = new_tensor_like(d0);
 	THCudaTensor *outlier_tmp = new_tensor_like(outlier);
@@ -663,7 +667,7 @@ int iterative_region_voting(lua_State *L)
 			THCudaTensor_nElement(d0),
 			THCudaTensor_size(d0, 2),
 			THCudaTensor_size(d0, 3),
-			tau_s, tau_h, 1);
+			tau_s, tau_h, disp_max, 1);
 		// TODO change: 1 -> i % 2
 
 	}
@@ -837,12 +841,12 @@ int depth_discontinuity_adjustment(lua_State *L) {
 	return 1;
 }
 
-__global__ void subpixel_enchancement(float *d0, float *c2, float *out, int size, int dim23) {
+__global__ void subpixel_enchancement(float *d0, float *c2, float *out, int size, int dim23, int disp_max) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < size) {
 		int d = d0[id];
 		out[id] = d;
-		if (1 <= d && d < DISP_MAX - 1) {
+		if (1 <= d && d < disp_max - 1) {
 			float cn = c2[(d - 1) * dim23 + id];
 			float cz = c2[d * dim23 + id];
 			float cp = c2[(d + 1) * dim23 + id];
@@ -857,6 +861,7 @@ __global__ void subpixel_enchancement(float *d0, float *c2, float *out, int size
 int subpixel_enchancement(lua_State *L) {
 	THCudaTensor *d0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
 	THCudaTensor *c2 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	int disp_max = luaL_checkinteger(L, 3);
 	THCudaTensor *out = new_tensor_like(d0);
 
 	subpixel_enchancement<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
@@ -864,7 +869,8 @@ int subpixel_enchancement(lua_State *L) {
 		THCudaTensor_data(c2),
 		THCudaTensor_data(out),
 		THCudaTensor_nElement(out),
-		THCudaTensor_size(out, 2) * THCudaTensor_size(out, 3));
+		THCudaTensor_size(out, 2) * THCudaTensor_size(out, 3),
+		disp_max);
 	checkCudaError(L);
 	luaT_pushudata(L, out, "torch.CudaTensor");
 	return 1;
