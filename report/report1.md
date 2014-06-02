@@ -1,7 +1,7 @@
 AD
 --
 
-![ad_vol](img/ad_vol.png)
+![absdiff_vol](img/absdiff_vol.png)
 
 Census
 ------

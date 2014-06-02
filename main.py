@@ -21,7 +21,7 @@ def match(x0, x1):
 
     if DEBUG:
         pred = ad_vol.argmin(0).astype(np.float64) * scale
-        Image.fromarray(pred.astype(np.uint8)).save('report/img/ad_vol.png')
+        Image.fromarray(pred.astype(np.uint8)).save('report/img/absdiff_vol.png')
 
     # census
     x0c = main_.census_transform(x0m)
