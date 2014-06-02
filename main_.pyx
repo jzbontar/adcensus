@@ -427,8 +427,8 @@ def depth_discontinuity_adjustment(np.ndarray[np.int_t, ndim=2] d0,
 
     return d0_res
 
-def subpixel_enchancement(np.ndarray[np.int_t, ndim=2] d0,
-                          np.ndarray[np.float64_t, ndim=3] vol):
+def subpixel_enhancement(np.ndarray[np.int_t, ndim=2] d0,
+                         np.ndarray[np.float64_t, ndim=3] vol):
     cdef np.ndarray[np.float64_t, ndim=2] d0_res
     cdef int i, j, d
     cdef double cn, cz, cp, denom

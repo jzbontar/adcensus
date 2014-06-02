@@ -1,31 +1,49 @@
 AD
-==
+--
 
-![absdiff](img/absdiff.png)
+![ad_vol](img/ad_vol.png)
 
 Census
-======
+------
 
-![census](img/census.png)
+![census_vol](img/census_vol.png)
 
 ADCensus
-========
+--------
 
-	ad_lambda = 10
-	census_lambda = 30
+![adcensus_vol](img/adcensus_vol.png)
 
-![adcensus](img/adcensus.png)
+Cross-based Cost Aggregation
+----------------------------
 
-Cross-based cost aggregation
-============================
+![cbca_vol](img/cbca_vol.png)  
 
-	4 iterations
-	L1 = 34
-	L2 = 17
-	tau1 = 20
-	tau2 = 6
+Semi-global Matching
+--------------------
 
-![cbca1](img/cbca1.png)  
-![cbca2](img/cbca2.png)  
-![cbca3](img/cbca3.png)  
-![cbca4](img/cbca4.png)  
+![sgm_vol](img/sgm_vol.png)
+
+Outlier Detection
+-----------------
+
+![outlier](img/outlier.png)
+
+Iterative Region Voting
+-----------------------
+
+![iterative_region_voting](img/iterative_region_voting.png)
+
+Proper Interpolation
+--------------------
+
+![proper_interpolation](img/proper_interpolation.png)
+
+Depth Discontinuity Adjustment
+------------------------------
+
+![depth_discontinuity_adjustment](img/depth_discontinuity_adjustment.png)
+
+Subpixel Enhancement
+---------------------
+
+![subpixel_enhancement](img/subpixel_enhancement.png)
