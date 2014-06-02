@@ -106,5 +106,5 @@ for _, stereo_pair in ipairs(stereo_pairs) do
    d0 = adcensus.median3(d0)
 
    res = d0:mul(scale):double()
-   res.libpng.save(('res/%s.png'):format(pair_name), res[{1,1}])
+   res.libpng.save(('res.lua/%s.png'):format(pair_name), res[{1,1}])
 end

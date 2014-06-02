@@ -1,4 +1,4 @@
-#cython: boundscheck=True
+#cython: boundscheck=False
 #cython: wraparound=False
 
 cdef extern from "math.h":
@@ -9,9 +9,7 @@ from scipy.ndimage.filters import gaussian_filter, sobel
 import numpy as np
 cimport numpy as np
 
-cdef int height = 288 
-cdef int width = 384 
-cdef int disp_max = 16
+cdef int height, width, disp_max
 
 cdef int L1 = 34
 cdef int L2 = 17
@@ -26,6 +24,13 @@ cdef int tau_s = 20
 cdef double tau_h = 0.4
 
 cdef int tau_e = 10 
+
+def init(int h, int w, int d):
+    global height, width, disp_max
+
+    height = h
+    width = w
+    disp_max = d
 
 def census_transform(np.ndarray[np.float64_t, ndim=3] x):
     cdef np.ndarray[np.int_t, ndim=3] cen
@@ -272,7 +277,7 @@ def outlier_detection(np.ndarray[np.int_t, ndim=2] d0,
     outlier = np.empty_like(d0)
     for i in range(height):
         for j in range(width):
-            if d0[i,j] == d1[i,j - d0[i,j]]:
+            if j - d0[i,j] < 0 or d0[i,j] == d1[i,j - d0[i,j]]:
                 # not an outlier
                 outlier[i,j] = 0
             else:
