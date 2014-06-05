@@ -32,6 +32,22 @@ def init(int h, int w, int d):
     width = w
     disp_max = d
 
+def ad_vol(np.ndarray[np.float64_t, ndim=3] x0, np.ndarray[np.float64_t, ndim=3] x1):
+    cdef np.ndarray[np.float64_t, ndim=3] res
+    cdef int d, i, j, c
+
+    res = np.zeros((disp_max, height, width))
+    for d in range(disp_max):
+        for i in range(height):
+            for j in range(width):
+                if j - d < 0:
+                    res[d,i,j] = INFINITY
+                else:
+                    for c in range(3):
+                        res[d,i,j] += abs(x0[i,j,c] - x1[i,j-d,c])
+                    res[d,i,j] /= 3
+    return res
+
 def census_transform(np.ndarray[np.float64_t, ndim=3] x):
     cdef np.ndarray[np.int_t, ndim=3] cen
     cdef int i, j, ii, jj, k, ind, ne
@@ -60,13 +76,13 @@ cdef int cross_coditions(int i, int j, int ii, int jj, int iii, int jjj,
     if abs(i - ii) == 1 or abs(j - jj) == 1: return 1
 
     # rule 1
-    if abs(x[ii,jj,0] - x[iii,jjj,0]) >= tau1: return 0
-    if abs(x[ii,jj,1] - x[iii,jjj,1]) >= tau1: return 0
-    if abs(x[ii,jj,2] - x[iii,jjj,2]) >= tau1: return 0
-
     if abs(x[i,j,0] - x[ii,jj,0]) >= tau1: return 0
     if abs(x[i,j,1] - x[ii,jj,1]) >= tau1: return 0
     if abs(x[i,j,2] - x[ii,jj,2]) >= tau1: return 0
+
+    if abs(x[ii,jj,0] - x[iii,jjj,0]) >= tau1: return 0
+    if abs(x[ii,jj,1] - x[iii,jjj,1]) >= tau1: return 0
+    if abs(x[ii,jj,2] - x[iii,jjj,2]) >= tau1: return 0
 
     # rule 2
     if abs(i - ii) >= L1 or abs(j - jj) >= L1: return 0

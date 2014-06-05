@@ -10,16 +10,14 @@ import pyximport; pyximport.install()
 import main_
 
 DEBUG = 1
-IMG_DIR = 'report.tmp/img'
+IMG_DIR = ''
 
 def match(x0, x1):
     x0m = median_filter(x0, size=(3, 3, 1))
     x1m = median_filter(x1, size=(3, 3, 1))
 
     # ad
-    ad_vol = np.ones((disp_max, height, width)) * np.inf
-    for i in range(disp_max):
-        ad_vol[i,:,i:] = np.mean(np.abs(x0m[:,i:] - x1m[:,:width - i]), 2)
+    ad_vol = main_.ad_vol(x0m, x1m)
 
     if DEBUG:
         pred = ad_vol.argmin(0).astype(np.float64) * scale
@@ -53,6 +51,7 @@ def match(x0, x1):
     x0c = main_.cross(x0m)
     x1c = main_.cross(x1m)
 
+    adcensus_vol = census_vol 
     for i in range(2):
         adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 0)
         adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 1)
@@ -73,8 +72,8 @@ def match(x0, x1):
 
 stereo_pairs = [['tsukuba', 16, 16], ['venus', 20, 8], ['teddy', 60, 4], ['cones', 60, 4]]
 stereo_pairs = [['cones', 60, 4]]
-stereo_pairs = [['tsukuba', 16, 16]]
 stereo_pairs = [['teddy', 60, 4]]
+stereo_pairs = [['tsukuba', 16, 16]]
 for pair_name, disp_max, scale in stereo_pairs:
     print(pair_name)
     x0 = np.array(Image.open('data/stereo-pairs/%s/imL.png' % pair_name), dtype=np.float64)
