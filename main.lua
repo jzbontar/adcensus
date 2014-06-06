@@ -23,11 +23,29 @@ tau_e = 10
 cutorch.setDevice(1)
 
 function savePNG(fname, vol)
-   local pred = torch.CudaTensor(1, 1, height, width)
-   adcensus.spatial_argmin(vol, pred)
-   --pred = pred:clone()
-   pred:div(disp_max)
-   image.savePNG(fname, pred[{1,1}])
+   --local pred = torch.CudaTensor(1, 1, height, width)
+   --adcensus.spatial_argmin(vol, pred)
+   pred = vol:double():mul(scale)
+   pred.libpng.save(fname, pred[{1,1}])
+end
+
+function saveOutlier(fname, x0, outlier)
+   img = x0:double()
+   for i=1,height do
+      for j=1,width do
+         if outlier[{1,1,i,j}] == 1 then
+            img[{1,1,i,j}] = 0
+            img[{1,2,i,j}] = 255
+            img[{1,3,i,j}] = 0
+         end
+         if outlier[{1,1,i,j}] == 2 then
+            img[{1,1,i,j}] = 255
+            img[{1,2,i,j}] = 0
+            img[{1,3,i,j}] = 0
+         end
+      end
+   end
+   img.libpng.save(fname, img[1])
 end
 
 function match(x0m, x1m)
@@ -57,8 +75,6 @@ function match(x0m, x1m)
    -- cbca
    adcensus.cbca(x0c, x1c, adcensus_vol)
 
-   savePNG('foo.png', adcensus_vol)
-
    -- sgm
    local tmp = torch.CudaTensor(8, disp_max, height, width):zero()
    adcensus.sgm(x0m, x1m, adcensus_vol, tmp, pi1, pi2, tau_so)
@@ -68,6 +84,7 @@ function match(x0m, x1m)
 end
 
 stereo_pairs = {{'tsukuba', 16, 16}, {'venus', 20, 8}, {'teddy', 60, 4}, {'cones', 60, 4}}
+stereo_pairs = {{'teddy', 60, 4}}
 for _, stereo_pair in ipairs(stereo_pairs) do
    pair_name = stereo_pair[1]
    disp_max = stereo_pair[2]
@@ -96,12 +113,15 @@ for _, stereo_pair in ipairs(stereo_pairs) do
    d0:add(-1)
    d1:add(-1)
 
-   outlier = torch.CudaTensor(1, 1, height, width)
+   outlier = torch.CudaTensor(1, 1, height, width):zero()
    adcensus.outlier_detection(d0, d1, outlier, disp_max)
    adcensus.iterative_region_voting(d0, x0c, x1c, outlier, tau_s, tau_h, disp_max)
    d0 = adcensus.proper_interpolation(x0m, d0, outlier)
+   savePNG('foo.png', d0)
    g1, g2 = adcensus.sobel(d0)
    d0 = adcensus.depth_discontinuity_adjustment(d0, c2_0, g1, g2, tau_e)
+   savePNG('bar.png', d0)
+   os.exit()
    d0 = adcensus.subpixel_enchancement(d0, c2_0, disp_max)
    d0 = adcensus.median3(d0)
 

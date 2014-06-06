@@ -165,6 +165,7 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
 
     # left-right
     res = np.empty_like(vol)
+    min_prev = 0
     for i in range(height):
         for j in range(width):
             min_curr = INFINITY
@@ -181,7 +182,7 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
                     if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1,      pi2
                     elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4,  pi2 / 4
                     elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4,  pi2 / 4
-                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10, pi2 / 10
+                    else:                               P1, P2 = pi1 / 10, pi2 / 10
 
                     res[d,i,j] = vol[d,i,j] + min(
                         res[d,i,j-1],
@@ -211,7 +212,7 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
                     if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1, pi2
                     elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4., pi2 / 4.
                     elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4., pi2 / 4.
-                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10., pi2 / 10.
+                    else:                               P1, P2 = pi1 / 10, pi2 / 10
 
                     res[d,i,j] = vol[d,i,j] - min_prev + min(
                         res[d,i,j+1],
@@ -241,7 +242,7 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
                     if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1, pi2
                     elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4, pi2 / 4
                     elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4, pi2 / 4
-                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10, pi2 / 10
+                    else:                               P1, P2 = pi1 / 10, pi2 / 10
 
                     res[d,i,j] = vol[d,i,j] - min_prev + min(
                         res[d,i-1,j],
@@ -271,7 +272,7 @@ def sgm(np.ndarray[np.float64_t, ndim=3] x0,
                     if   D1 <  tau_so and D2 <  tau_so: P1, P2 = pi1, pi2
                     elif D1 <  tau_so and D2 >= tau_so: P1, P2 = pi1 / 4, pi2 / 4
                     elif D1 >= tau_so and D2 <  tau_so: P1, P2 = pi1 / 4, pi2 / 4
-                    elif D1 >= tau_so and D2 >= tau_so: P1, P2 = pi1 / 10, pi2 / 10
+                    else:                               P1, P2 = pi1 / 10, pi2 / 10
 
                     res[d,i,j] = vol[d,i,j] - min_prev + min(
                         res[d,i+1,j],
@@ -293,12 +294,14 @@ def outlier_detection(np.ndarray[np.int_t, ndim=2] d0,
     outlier = np.empty_like(d0)
     for i in range(height):
         for j in range(width):
-            if j - d0[i,j] < 0 or d0[i,j] == d1[i,j - d0[i,j]]:
+            if j - d0[i,j] < 0:
+                outlier[i,j] = 2
+            elif abs(d0[i,j] - d1[i,j - d0[i,j]]) < 1.1:
                 # not an outlier
                 outlier[i,j] = 0
             else:
                 for d in range(disp_max):
-                    if j - d > 0 and d == d1[i,j - d]:
+                    if j - d > 0 and abs(d - d1[i,j - d]) < 1.1:
                         # mismatch
                         outlier[i,j] = 1
                         break
@@ -308,13 +311,12 @@ def outlier_detection(np.ndarray[np.int_t, ndim=2] d0,
     return outlier
 
 def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
-                            np.ndarray[np.int_t, ndim=3] x1c,
                             np.ndarray[np.int_t, ndim=2] d0,
                             np.ndarray[np.int_t, ndim=2] outlier):
 
     cdef np.ndarray[np.int_t, ndim=1] hist
     cdef np.ndarray[np.int_t, ndim=2] d0_res, outlier_res
-    cdef int i, j, k, ii, jj, ii_s, ii_t, jj_s, jj_t, d, cnt
+    cdef int i, j, k, ii, jj, d, cnt
 
     hist = np.empty(disp_max, dtype=int)
     d0_res = np.empty_like(d0)
@@ -324,22 +326,18 @@ def iterative_region_voting(np.ndarray[np.int_t, ndim=3] x0c,
             d = d0[i,j]
             d0_res[i,j] = d
             outlier_res[i,j] = outlier[i,j]
-            if j - d < 0:
+            if outlier[i,j] == 0:
                 continue
             for k in range(disp_max):
                 hist[k] = 0
             cnt = 0
-            ii_s = max(x0c[i,j,0], x1c[i,j-d,0]) + 1
-            ii_t = min(x0c[i,j,1], x1c[i,j-d,1])
-            for ii in range(ii_s, ii_t):
-                jj_s = max(x0c[ii,j,2], x1c[ii,j-d,2] + d) + 1
-                jj_t = min(x0c[ii,j,3], x1c[ii,j-d,3] + d)
-                for jj in range(jj_s, jj_t):
+            for ii in range(x0c[i,j,0] + 1, x0c[i,j,1]):
+                for jj in range(x0c[ii,j,2] + 1, x0c[ii,j,3]):
                     if outlier[ii,jj] == 0:
                         hist[d0[ii,jj]] += 1
                         cnt += 1
             d = hist.argmax()
-            if outlier[i,j] == 0 or (cnt > tau_s and float(hist[d]) / cnt > tau_h):
+            if cnt > tau_s and float(hist[d]) / cnt > tau_h:
                 outlier_res[i,j] = 0
                 d0_res[i,j] = d
     return d0_res, outlier_res
@@ -354,23 +352,22 @@ def proper_interpolation(np.ndarray[np.float64_t, ndim=3] x0,
     cdef double min_val, di, dj, ii_d, jj_d, dist
 
     dir = np.array([
-        [-0.5, -1],
-        [-1,   -0.5],
-        [-1,   -1],
-        [0,    -1],
-        [0.5 , -1],
-        [1,    -0.5],
-        [1,    -1],
-        [-1,    0],
-        [1,     0],
-
-        [-1,    0.5],
-        [-1,    1],
+        [0   ,  1],
         [-0.5,  1],
-        [0,     1],
-        [0.5,   1],
-        [1,     0.5],
-        [1,     1],
+        [-1  ,  1],
+        [-1  ,  0.5],
+        [-1  ,  0],
+        [-1  , -0.5],
+        [-1  , -1],
+        [-0.5, -1],
+        [0   , -1],
+        [0.5 , -1],
+        [1   , -1],
+        [1   , -0.5],
+        [1   ,  0],
+        [1   ,  0.5],
+        [1   ,  1],
+        [0.5 ,  1]
     ])
 
     d0_res = np.empty_like(d0)
@@ -380,8 +377,8 @@ def proper_interpolation(np.ndarray[np.float64_t, ndim=3] x0,
             if outlier[i,j] != 0:
                 min_val = INFINITY
                 min_d = -1
-                for d in range(16 if outlier[i,j] == 1 else 9):
-                    di, dj = dir[d,0], dir[d,1]
+                for d in range(16):
+                    dj, di = dir[d,0], dir[d,1]
                     ii_d, jj_d = i, j
                     ii, jj = round(ii_d), round(jj_d)
                     while 0 <= ii < height and 0 <= jj < width and outlier[ii,jj] != 0:
@@ -395,10 +392,9 @@ def proper_interpolation(np.ndarray[np.float64_t, ndim=3] x0,
                             dist = max(abs(x0[i,j,0] - x0[ii,jj,0]),
                                        abs(x0[i,j,1] - x0[ii,jj,1]),
                                        abs(x0[i,j,2] - x0[ii,jj,2]))
-                        elif outlier[i,j] == 2:
+                        else:
                             # occlusion
                             dist = d0[ii,jj]
-                        else: assert(False)
 
                         if dist < min_val:
                             min_val = dist

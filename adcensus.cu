@@ -548,12 +548,15 @@ __global__ void outlier_detection(float *d0, float *d1, float *outlier, int size
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < size) {
 		int x = id % dim3;
-		if (id - (int)d0[id] < 0 || abs(d0[id] - d1[id - (int)d0[id]]) < 0.1) {
+		int d0i = d0[id];
+		if (x - d0i < 0) {
+			outlier[id] = 1;
+		} else if (abs(d0[id] - d1[id - d0i]) < 1.1) {
 			outlier[id] = 0; /* match */
 		} else {
 			outlier[id] = 1; /* occlusion */
 			for (int d = 0; d < disp_max; d++) {
-				if (x - d >= 0 && abs(d - d1[id - d]) < 0.1) {
+				if (x - d >= 0 && abs(d - d1[id - d]) < 1.1) {
 					outlier[id] = 2; /* mismatch */
 					break;
 				}
@@ -586,13 +589,11 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 	if (id < size) {
 		int x = id % dim3;
 		int y = id / dim3;
-		int d = d0[id];
 		
-		d0_out[id] = d;
+		d0_out[id] = d0[id];
 		outlier_out[id] = outlier[id];
 
-		/* the if should include `outlier[id] == 0 ||`, but it works better without it */
-		if (x - d < 0) return;
+		if (outlier[id] == 0) return;
 
 		assert(disp_max < DISP_MAX);
 		int hist[DISP_MAX];
@@ -602,11 +603,11 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 
 		assert(0 <= direction && direction < 2);
 		if (direction == 0) {
-			int xx_s = max(x0c[(0 * dim2 + y) * dim3 + x], x1c[(0 * dim2 + y) * dim3 + x - d] + d);
-			int xx_t = min(x0c[(1 * dim2 + y) * dim3 + x], x1c[(1 * dim2 + y) * dim3 + x - d] + d);
+			int xx_s = x0c[(0 * dim2 + y) * dim3 + x];
+			int xx_t = x0c[(1 * dim2 + y) * dim3 + x];
 			for (int xx = xx_s + 1; xx < xx_t; xx++) {
-				int yy_s = max(x0c[(2 * dim2 + y) * dim3 + xx], x1c[(2 * dim2 + y) * dim3 + xx - d]);
-				int yy_t = min(x0c[(3 * dim2 + y) * dim3 + xx], x1c[(3 * dim2 + y) * dim3 + xx - d]);
+				int yy_s = x0c[(2 * dim2 + y) * dim3 + xx];
+				int yy_t = x0c[(3 * dim2 + y) * dim3 + xx];
 				for (int yy = yy_s + 1; yy < yy_t; yy++) {
 					if (outlier[yy * dim3 + xx] == 0) {
 						hist[(int)d0[yy * dim3 + xx]]++;
@@ -614,11 +615,11 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 				}
 			}
 		} else {
-			int yy_s = max(x0c[(2 * dim2 + y) * dim3 + x], x1c[(2 * dim2 + y) * dim3 + x - d]);
-			int yy_t = min(x0c[(3 * dim2 + y) * dim3 + x], x1c[(3 * dim2 + y) * dim3 + x - d]);
+			int yy_s = x0c[(2 * dim2 + y) * dim3 + x];
+			int yy_t = x0c[(3 * dim2 + y) * dim3 + x];
 			for (int yy = yy_s + 1; yy < yy_t; yy++) {
-				int xx_s = max(x0c[(0 * dim2 + yy) * dim3 + x], x1c[(0 * dim2 + yy) * dim3 + x - d] + d);
-				int xx_t = min(x0c[(1 * dim2 + yy) * dim3 + x], x1c[(1 * dim2 + yy) * dim3 + x - d] + d);
+				int xx_s = x0c[(0 * dim2 + yy) * dim3 + x];
+				int xx_t = x0c[(1 * dim2 + yy) * dim3 + x];
 				for (int xx = xx_s + 1; xx < xx_t; xx++) {
 					if (outlier[yy * dim3 + xx] == 0) {
 						hist[(int)d0[yy * dim3 + xx]]++;
@@ -636,7 +637,7 @@ __global__ void iterative_region_voting(float *d0, float *x0c, float *x1c, float
 			}
 		}
 
-		if (outlier[id] == 0 || (cnt > tau_s && (float)hist[max_i] / cnt > tau_h)) {
+		if (cnt > tau_s && (float)hist[max_i] / cnt > tau_h) {
 			outlier_out[id] = 0;
 			d0_out[id] = max_i;
 		}
@@ -656,7 +657,7 @@ int iterative_region_voting(lua_State *L)
 	THCudaTensor *d0_tmp = new_tensor_like(d0);
 	THCudaTensor *outlier_tmp = new_tensor_like(outlier);
 
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < 6; i++) {
 		iterative_region_voting<<<(THCudaTensor_nElement(d0) - 1) / TB + 1, TB>>>(
 			THCudaTensor_data(i % 2 == 0 ? d0 : d0_tmp),
 			THCudaTensor_data(x0c),
@@ -669,7 +670,6 @@ int iterative_region_voting(lua_State *L)
 			THCudaTensor_size(d0, 3),
 			tau_s, tau_h, disp_max, 1);
 		// TODO change: 1 -> i % 2
-
 	}
 	checkCudaError(L);
 	return 0;
@@ -687,7 +687,6 @@ __global__ void proper_interpolation(float *x0, float *d0, float *outlier, float
 		-1  , -1,
 		-0.5, -1,
 		0   , -1,
-
 		0.5 , -1,
 		1   , -1,
 		1   , -0.5,
@@ -708,7 +707,7 @@ __global__ void proper_interpolation(float *x0, float *d0, float *outlier, float
 		int y = id / dim3;
 		float min_d = CUDART_INF;
 		float min_diff = CUDART_INF;
-		for (int d = 0; d < (outlier[id] == 1 ? 9 : 16); d++) {
+		for (int d = 0; d < 16; d++) {
 			float dx = dir[2 * d];
 			float dy = dir[2 * d + 1];
 			float xx = x;
@@ -723,7 +722,8 @@ __global__ void proper_interpolation(float *x0, float *d0, float *outlier, float
 			}
 
 			int ind = yy_i * dim3 + xx_i;
-			if (outlier[ind] == 0) {
+			if (0 <= yy_i && yy_i < dim2 && 0 <= xx_i && xx_i < dim3) {
+				assert(outlier[ind] == 0);
 				if (outlier[id] == 1) {
 					if (d0[ind] < min_d) {
 						min_d = d0[ind];
