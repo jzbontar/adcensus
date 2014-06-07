@@ -48,14 +48,14 @@ function saveOutlier(fname, x0, outlier)
    img.libpng.save(fname, img[1])
 end
 
-function match(x0m, x1m)
+function match(x0, x1)
    -- ad volume
    local ad_vol = torch.CudaTensor(1, disp_max, height, width)
-   adcensus.ad(x0m, x1m, ad_vol)
+   adcensus.ad(x0, x1, ad_vol)
 
    -- census volume
    local census_vol = torch.CudaTensor(1, disp_max, height, width)
-   adcensus.census(x0m, x1m, census_vol)
+   adcensus.census(x0, x1, census_vol)
 
    -- adcensus volume
    function rho(c, lambda)
@@ -69,21 +69,22 @@ function match(x0m, x1m)
    -- cross computation
    local x0c = torch.CudaTensor(1, 4, height, width)
    local x1c = torch.CudaTensor(1, 4, height, width)
-   adcensus.cross(x0m, x0c, L1, L2, tau1, tau2)
-   adcensus.cross(x1m, x1c, L1, L2, tau1, tau2)
+   adcensus.cross(x0, x0c, L1, L2, tau1, tau2)
+   adcensus.cross(x1, x1c, L1, L2, tau1, tau2)
 
    -- cbca
    adcensus.cbca(x0c, x1c, adcensus_vol)
 
    -- sgm
    local tmp = torch.CudaTensor(8, disp_max, height, width):zero()
-   adcensus.sgm(x0m, x1m, adcensus_vol, tmp, pi1, pi2, tau_so)
+   adcensus.sgm(x0, x1, adcensus_vol, tmp, pi1, pi2, tau_so)
    local sgm_out = tmp:mean(1)
 
    return sgm_out, x0c, x1c
 end
 
 stereo_pairs = {{'tsukuba', 16, 16}, {'venus', 20, 8}, {'teddy', 60, 4}, {'cones', 60, 4}}
+stereo_pairs = {{'venus', 20, 8}}
 stereo_pairs = {{'teddy', 60, 4}}
 for _, stereo_pair in ipairs(stereo_pairs) do
    pair_name = stereo_pair[1]
@@ -99,12 +100,8 @@ for _, stereo_pair in ipairs(stereo_pairs) do
    x0 = x0:float():resize(1, 3, height, width):cuda()
    x1 = x1:float():resize(1, 3, height, width):cuda()
 
-   -- median filter
-   x0m = adcensus.median3(x0)
-   x1m = adcensus.median3(x1)
-
-   c2_0, x0c, x1c = match(x0m, x1m)
-   c2_1 = adcensus.fliplr(match(adcensus.fliplr(x1m), adcensus.fliplr(x0m)))
+   c2_0, x0c, x1c = match(x0, x1)
+   c2_1 = adcensus.fliplr(match(adcensus.fliplr(x1), adcensus.fliplr(x0)))
 
    d0 = torch.CudaTensor(1, 1, height, width)
    d1 = torch.CudaTensor(1, 1, height, width)
@@ -116,12 +113,14 @@ for _, stereo_pair in ipairs(stereo_pairs) do
    outlier = torch.CudaTensor(1, 1, height, width):zero()
    adcensus.outlier_detection(d0, d1, outlier, disp_max)
    adcensus.iterative_region_voting(d0, x0c, x1c, outlier, tau_s, tau_h, disp_max)
-   d0 = adcensus.proper_interpolation(x0m, d0, outlier)
-   savePNG('foo.png', d0)
+   d0 = adcensus.proper_interpolation(x0, d0, outlier)
    g1, g2 = adcensus.sobel(d0)
-   d0 = adcensus.depth_discontinuity_adjustment(d0, c2_0, g1, g2, tau_e)
-   savePNG('bar.png', d0)
+
+   x = g1:double():abs():gt(10):mul(255)
+   x.libpng.save('foo.png', x[{1,1}])
    os.exit()
+
+   d0 = adcensus.depth_discontinuity_adjustment(d0, c2_0, g1, g2, tau_e)
    d0 = adcensus.subpixel_enchancement(d0, c2_0, disp_max)
    d0 = adcensus.median3(d0)
 

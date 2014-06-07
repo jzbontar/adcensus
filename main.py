@@ -13,19 +13,16 @@ DEBUG = 1
 IMG_DIR = ''
 
 def match(x0, x1):
-    x0m = median_filter(x0, size=(3, 3, 1), mode='constant')
-    x1m = median_filter(x1, size=(3, 3, 1), mode='constant')
-
     # ad
-    ad_vol = main_.ad_vol(x0m, x1m)
+    ad_vol = main_.ad_vol(x0, x1)
 
     if DEBUG:
         pred = ad_vol.argmin(0).astype(np.float64) * scale
         Image.fromarray(pred.astype(np.uint8)).save(os.path.join(IMG_DIR, 'absdiff_vol.png'))
 
     # census
-    x0c = main_.census_transform(x0m)
-    x1c = main_.census_transform(x1m)
+    x0c = main_.census_transform(x0)
+    x1c = main_.census_transform(x1)
     census_vol = np.ones((disp_max, height, width)) * np.inf
     for i in range(disp_max):
         census_vol[i,:,i:] = np.sum(x0c[:,i:] != x1c[:,:width - i], 2)
@@ -48,8 +45,8 @@ def match(x0, x1):
         Image.fromarray(pred.astype(np.uint8)).save(os.path.join(IMG_DIR, 'adcensus_vol.png'))
 
     # cbca
-    x0c = main_.cross(x0m)
-    x1c = main_.cross(x1m)
+    x0c = main_.cross(x0)
+    x1c = main_.cross(x1)
 
     for i in range(2):
         adcensus_vol = main_.cbca(x0c, x1c, adcensus_vol, 0)
@@ -60,7 +57,7 @@ def match(x0, x1):
         Image.fromarray(pred.astype(np.uint8)).save(os.path.join(IMG_DIR, 'cbca_vol.png'))
 
     # semi-global matching
-    c2_vol = main_.sgm(x0m, x1m, adcensus_vol)
+    c2_vol = main_.sgm(x0, x1, adcensus_vol)
 
     if DEBUG:
         pred = c2_vol.argmin(0).astype(np.float64) * scale
@@ -70,8 +67,8 @@ def match(x0, x1):
 
 #stereo_pairs = [['cones', 60, 4]]
 #stereo_pairs = [['tsukuba', 16, 16]]
-stereo_pairs = [['tsukuba', 16, 16], ['venus', 20, 8], ['teddy', 60, 4], ['cones', 60, 4]]
 stereo_pairs = [['teddy', 60, 4]]
+stereo_pairs = [['tsukuba', 16, 16], ['venus', 20, 8], ['teddy', 60, 4], ['cones', 60, 4]]
 for pair_name, disp_max, scale in stereo_pairs:
     print(pair_name)
     x0 = np.array(Image.open('data/stereo-pairs/%s/imL.png' % pair_name), dtype=np.float64)
@@ -79,10 +76,8 @@ for pair_name, disp_max, scale in stereo_pairs:
     height = x0.shape[0]
     width = x0.shape[1]
     main_.init(height, width, disp_max)
-    x0m = median_filter(x0, size=(3, 3, 1), mode='constant')
-    x1m = median_filter(x1, size=(3, 3, 1), mode='constant')
-    x0c = main_.cross(x0m)
-    x1c = main_.cross(x1m)
+    x0c = main_.cross(x0)
+    x1c = main_.cross(x1)
 
     c2_1 = match(x1[:,::-1], x0[:,::-1])[:,:,::-1]
     c2_0 = match(x0, x1)
@@ -111,7 +106,7 @@ for pair_name, disp_max, scale in stereo_pairs:
         img[outlier == 2, 1] = 255
         Image.fromarray(img.astype(np.uint8)).save(os.path.join(IMG_DIR, 'outlier2.png'))
 
-    d0 = main_.proper_interpolation(x0m, d0, outlier)
+    d0 = main_.proper_interpolation(x0, d0, outlier)
     if DEBUG: Image.fromarray((d0 * scale).astype(np.uint8)).save(os.path.join(IMG_DIR, 
         'proper_interpolation.png'))
     d0 = main_.depth_discontinuity_adjustment(d0, c2_0)
