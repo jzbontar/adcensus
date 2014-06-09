@@ -83,9 +83,9 @@ function match(x0, x1)
    return sgm_out, x0c, x1c
 end
 
-stereo_pairs = {{'tsukuba', 16, 16}, {'venus', 20, 8}, {'teddy', 60, 4}, {'cones', 60, 4}}
 stereo_pairs = {{'venus', 20, 8}}
 stereo_pairs = {{'teddy', 60, 4}}
+stereo_pairs = {{'tsukuba', 16, 16}, {'venus', 20, 8}, {'teddy', 60, 4}, {'cones', 60, 4}}
 for _, stereo_pair in ipairs(stereo_pairs) do
    pair_name = stereo_pair[1]
    disp_max = stereo_pair[2]
@@ -115,11 +115,6 @@ for _, stereo_pair in ipairs(stereo_pairs) do
    adcensus.iterative_region_voting(d0, x0c, x1c, outlier, tau_s, tau_h, disp_max)
    d0 = adcensus.proper_interpolation(x0, d0, outlier)
    g1, g2 = adcensus.sobel(d0)
-
-   x = g1:double():abs():gt(10):mul(255)
-   x.libpng.save('foo.png', x[{1,1}])
-   os.exit()
-
    d0 = adcensus.depth_discontinuity_adjustment(d0, c2_0, g1, g2, tau_e)
    d0 = adcensus.subpixel_enchancement(d0, c2_0, disp_max)
    d0 = adcensus.median3(d0)

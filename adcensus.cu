@@ -801,25 +801,43 @@ int sobel(lua_State *L) {
 	return 2;
 }
 
-__global__ void depth_discontinuity_adjustment(float *d0, float *c2, float *g1, float *g2, float *out, int size, int dim23, int dim3, float tau_e)
+__global__ void depth_discontinuity_adjustment(float *d0, float *vol, float *g1, float *g2, float *out, int size, int dim23, int dim3, float tau_e)
 {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id < size) {
-		float d = d0[id];
-		if (g1[id] > tau_e) {
-			if (c2[(int)d0[id - 1] * dim23 + id] < c2[(int)d0[id] * dim23 + id]) d = d0[id - 1];
-			if (c2[(int)d0[id + 1] * dim23 + id] < c2[(int)d0[id] * dim23 + id]) d = d0[id + 1];
-		} else if (g2[id] > tau_e) {
-			if (c2[(int)d0[id - dim3] * dim23 + id] < c2[(int)d0[id] * dim23 + id]) d = d0[id - dim3];
-			if (c2[(int)d0[id + dim3] * dim23 + id] < c2[(int)d0[id] * dim23 + id]) d = d0[id + dim3];
+		int x = id % dim3;
+
+		if (x - (int)d0[id] < 0) {
+			out[id] = d0[id];
+			return;
 		}
-		out[id] = d;
+
+		int dp, dc, dn, edge;
+		dc = d0[id];
+		edge = 0;
+
+		if (g1[id] < -tau_e) {
+			dp = d0[id - 1];
+			dn = d0[id + 1];
+			edge = 1;
+		} else if (abs(g2[id]) > tau_e) {
+			dp = d0[id - dim3];
+			dn = d0[id + dim3];
+			edge = 1;
+		}
+
+		if (edge) {
+			if (vol[dp * dim23 + id] < vol[dc * dim23 + id]) dc = dp;
+			if (vol[dn * dim23 + id] < vol[dc * dim23 + id]) dc = dn;
+		}
+
+		out[id] = dc;
 	}
 }
 
 int depth_discontinuity_adjustment(lua_State *L) {
 	THCudaTensor *d0 = (THCudaTensor*)luaT_checkudata(L, 1, "torch.CudaTensor");
-	THCudaTensor *c2 = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
+	THCudaTensor *vol = (THCudaTensor*)luaT_checkudata(L, 2, "torch.CudaTensor");
 	THCudaTensor *g1 = (THCudaTensor*)luaT_checkudata(L, 3, "torch.CudaTensor");
 	THCudaTensor *g2 = (THCudaTensor*)luaT_checkudata(L, 4, "torch.CudaTensor");
 	float tau_e = luaL_checknumber(L, 5);
@@ -828,7 +846,7 @@ int depth_discontinuity_adjustment(lua_State *L) {
 
 	depth_discontinuity_adjustment<<<(THCudaTensor_nElement(out) - 1) / TB + 1, TB>>>(
 		THCudaTensor_data(d0),
-		THCudaTensor_data(c2),
+		THCudaTensor_data(vol),
 		THCudaTensor_data(g1),
 		THCudaTensor_data(g2),
 		THCudaTensor_data(out),
